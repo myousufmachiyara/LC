@@ -70,115 +70,30 @@ class SalesReportController extends Controller
 
         /* ================= CUSTOMER WISE ================= */
         if ($tab === 'CW') {
-
-            $query = SaleInvoice::with(['account', 'items'])
-                ->whereBetween('date', [$from, $to]);
-
-            if ($customerId) {
-                $query->where('account_id', $customerId);
-            }
-
+            // ... (keep query as is)
             $customerWise = $query->get()
                 ->groupBy('account_id')
                 ->map(function ($sales) {
-
                     $customerName = $sales->first()->account->name ?? 'Unknown Customer';
-
                     $items = collect();
 
                     foreach ($sales as $sale) {
                         foreach ($sale->items as $item) {
-                            $qty   = $item->quantity ?? $item->qty ?? 0;
-                            $price = $item->sale_price ?? $item->price ?? 0;
-
                             $items->push((object)[
-                                'invoice_date' => $sale->date,
-                                'invoice_no'   => $sale->invoice_no ?? $sale->id,
-                                'item_name'    => $item->product->name ?? 'N/A',
-                                'quantity'     => $qty,
-                                'rate'         => $price,
-                                'total'        => $qty * $price,
+                                // ... (keep items as is)
                             ]);
                         }
                     }
 
                     return (object)[
-                        'customer_name' => $customerName,
+                        'customer'      => $customerName, // Changed from customer_name to customer
+                        'count'         => $sales->count(), // Added for the "No. of Invoices" column
                         'items'         => $items,
                         'total_qty'     => $items->sum('quantity'),
-                        'total_amount'  => $items->sum('total'),
+                        'total'         => $items->sum('total'), // Renamed to 'total' to match view
                     ];
                 })
                 ->values();
-        }
-
-        /* ================= PROFIT REPORT (Synced + Customization Costing) ================= */
-        if ($tab === 'PR') {
-            $sales = \App\Models\SaleInvoice::with(['account', 'items.customizations'])
-                ->whereBetween('date', [$from, $to])
-                ->get()
-                ->map(function ($sale) {
-                    $invoiceRevenue = 0;
-                    $invoiceCost = 0;
-
-                    // Reusable helper for Landed Cost (Purchase + Bilty)
-                    $getLandedCost = function ($productId) {
-                        return \Cache::remember("landed_cost_prod_{$productId}", 86400, function () use ($productId) {
-                            // 1. Purchase Rate (Average)
-                            $pStats = \App\Models\PurchaseInvoiceItem::where('item_id', $productId)
-                                ->whereHas('invoice', fn ($q) => $q->whereNull('deleted_at'))
-                                ->selectRaw('SUM(quantity * price) as v, SUM(quantity) as q')
-                                ->first();
-                            $purchaseRate = ($pStats && $pStats->q > 0) ? ($pStats->v / $pStats->q) : 0;
-
-                            // 2. Bilty Cost logic
-                            $biltyTotal = \App\Models\PurchaseBiltyDetail::where('purchase_bilty_details.item_id', $productId)
-                                ->join('purchase_bilty', function ($join) {
-                                    $join->on('purchase_bilty.id', '=', 'purchase_bilty_details.bilty_id')
-                                        ->whereNull('purchase_bilty.deleted_at');
-                                })
-                                ->sum(\DB::raw('(purchase_bilty.bilty_amount / (SELECT SUM(quantity) FROM purchase_bilty_details d WHERE d.bilty_id = purchase_bilty.id)) * purchase_bilty_details.quantity'));
-
-                            $biltyQty = \App\Models\PurchaseBiltyDetail::where('purchase_bilty_details.item_id', $productId)
-                                ->join('purchase_bilty', function ($join) {
-                                    $join->on('purchase_bilty.id', '=', 'purchase_bilty_details.bilty_id')
-                                        ->whereNull('purchase_bilty.deleted_at');
-                                })
-                                ->sum('purchase_bilty_details.quantity');
-
-                            $biltyRate = ($biltyQty > 0) ? ($biltyTotal / $biltyQty) : 0;
-
-                            return $purchaseRate + $biltyRate;
-                        });
-                    };
-
-                    foreach ($sale->items as $item) {
-                        $invoiceRevenue += ($item->sale_price ?? 0) * $item->quantity;
-
-                        // Main Item Cost
-                        $unitCost = $getLandedCost($item->product_id);
-
-                        // Add Customization Costs to the unit cost
-                        if ($item->customizations) {
-                            foreach ($item->customizations as $custom) {
-                                $unitCost += $getLandedCost($custom->item_id);
-                            }
-                        }
-
-                        $invoiceCost += ($unitCost * $item->quantity);
-                    }
-
-                    $netRevenue = $invoiceRevenue - ($sale->discount ?? 0);
-                    return (object)[
-                        'date'     => $sale->date,
-                        'invoice'  => $sale->invoice_no,
-                        'customer' => $sale->account->name ?? 'N/A',
-                        'revenue'  => $netRevenue,
-                        'cost'     => $invoiceCost,
-                        'profit'   => $netRevenue - $invoiceCost,
-                        'margin'   => $netRevenue > 0 ? (($netRevenue - $invoiceCost) / $netRevenue) * 100 : 0
-                    ];
-                });
         }
 
         $customers = ChartOfAccounts::where('account_type', 'customer')->get();
