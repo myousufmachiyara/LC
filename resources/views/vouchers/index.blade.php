@@ -15,7 +15,7 @@
 
       <div class="card-body">
         <div class="table-responsive">
-          <table class="table table-bordered table-striped mb-0" id="default-datatable">
+          <table class="table table-bordered table-striped mb-0" id="voucher-datatable">
             <thead>
               <tr>
                 <th>Voch#</th>
@@ -205,23 +205,32 @@
 </div>
 
 <script>
-function getVoucherDetails(id) {
-    document.getElementById('updateForm').action = `/vouchers/{{ $type }}/${id}`;
-    fetch(`/vouchers/{{ $type }}/${id}`)
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('update_id').value = id;
-            document.getElementById('update_id_hidden').value = id;
-            document.getElementById('update_date').value = data.date;
-            $('#update_ac_dr_sid').val(data.ac_dr_sid).trigger('change');
-            $('#update_ac_cr_sid').val(data.ac_cr_sid).trigger('change');
-            document.getElementById('update_amount').value = data.amount;
-            document.getElementById('update_remarks').value = data.remarks;
-        });
-}
 
-function setDeleteId(id) {
-  document.getElementById('deleteForm').action = `/vouchers/{{ $type }}/${id}`;
-}
+  function getVoucherDetails(id) {
+      document.getElementById('updateForm').action = `/vouchers/{{ $type }}/${id}`;
+      fetch(`/vouchers/{{ $type }}/${id}`)
+          .then(res => res.json())
+          .then(data => {
+              document.getElementById('update_id').value = id;
+              document.getElementById('update_id_hidden').value = id;
+              document.getElementById('update_date').value = data.date;
+              $('#update_ac_dr_sid').val(data.ac_dr_sid).trigger('change');
+              $('#update_ac_cr_sid').val(data.ac_cr_sid).trigger('change');
+              document.getElementById('update_amount').value = data.amount;
+              document.getElementById('update_remarks').value = data.remarks;
+          });
+  }
+
+  function setDeleteId(id) {
+    document.getElementById('deleteForm').action = `/vouchers/{{ $type }}/${id}`;
+  }
+
+  $(document).ready(function() {
+    $('#voucher-datatable').DataTable({
+      pageLength: 50,
+      order: [[0, 'desc']],
+    });
+  });
+
 </script>
 @endsection
