@@ -281,12 +281,6 @@ class SaleInvoiceController extends Controller
 
                 $totalBill += ($item['sale_price'] * $item['quantity']);
 
-                // 🔹 DEDUCT NEW STOCK
-                if (!empty($item['variation_id'])) {
-                    ProductVariation::where('id', $item['variation_id'])
-                        ->decrement('stock_quantity', $item['quantity']);
-                }
-
                 // --- Enhanced COGS Logic (Variation Sensitive) ---
                 $latestPurchase = PurchaseInvoiceItem::where('item_id', $item['product_id'])
                 ->when(!empty($item['variation_id']), function($q) use ($item) {
