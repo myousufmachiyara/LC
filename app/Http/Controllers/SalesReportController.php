@@ -70,27 +70,29 @@ class SalesReportController extends Controller
 
         /* ================= CUSTOMER WISE ================= */
         if ($tab === 'CW') {
-            // ... (keep query as is)
+            $query = SaleInvoice::with(['account', 'items'])
+                ->whereBetween('date', [$from, $to]);
+
+            if ($customerId) {
+                $query->where('account_id', $customerId);
+            }
+
             $customerWise = $query->get()
                 ->groupBy('account_id')
                 ->map(function ($sales) {
                     $customerName = $sales->first()->account->name ?? 'Unknown Customer';
-                    $items = collect();
-
-                    foreach ($sales as $sale) {
-                        foreach ($sale->items as $item) {
-                            $items->push((object)[
-                                // ... (keep items as is)
-                            ]);
-                        }
-                    }
+                    
+                    $totalAmount = $sales->sum(function ($sale) {
+                        $lineTotal = $sale->items->sum(function ($item) {
+                            return ($item->sale_price ?? $item->price ?? 0) * ($item->quantity ?? 0);
+                        });
+                        return $lineTotal - ($sale->discount ?? 0);
+                    });
 
                     return (object)[
-                        'customer'      => $customerName, // Changed from customer_name to customer
-                        'count'         => $sales->count(), // Added for the "No. of Invoices" column
-                        'items'         => $items,
-                        'total_qty'     => $items->sum('quantity'),
-                        'total'         => $items->sum('total'), // Renamed to 'total' to match view
+                        'customer' => $customerName,
+                        'count'    => $sales->count(),
+                        'total'    => $totalAmount,
                     ];
                 })
                 ->values();
