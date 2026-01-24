@@ -181,9 +181,19 @@
 <script>
     let rowIndex = {{ $invoice->items->count() }};
 
+    // Convert PHP locations to a JS string for addRow()
+    const locationOptions = `@foreach($locations as $loc)
+      <option value="{{ $loc->id }}">{{ $loc->name }}</option>
+    @endforeach`;
+
+
     $(document).ready(function () {
         $('.select2-js').select2({ width: '100%' });
 
+        $('.product-select').each(function() {
+          updateStockLabel($(this));
+        });
+        
         // Initialize existing rows
         $('#itemTable tbody tr').each(function () {
             const row = $(this);
@@ -302,7 +312,9 @@
             </tr>`;
 
         $('#itemTable tbody').append(rowHtml);
-        $('#itemTable tbody tr').last().find('.select2-js').select2({ width: '100%' });
+        const $newRow = $('#itemTable tbody tr').last();
+        $newRow.find('.select2-js').select2({ width: '100%' });
+        calcTotal(); // Refresh net amounts
     }
 
     function removeRow(btn) {
