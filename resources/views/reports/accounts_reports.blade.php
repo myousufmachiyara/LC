@@ -96,6 +96,7 @@
                         @elseif ($key === 'trial_balance')
                             <tr>
                                 <th>Account</th>
+                                <th>Account Type</th>
                                 <th class="text-end">Debit</th>
                                 <th class="text-end">Credit</th>
                             </tr>
