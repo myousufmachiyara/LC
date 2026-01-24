@@ -339,6 +339,7 @@ class AccountsReportController extends Controller
             ->map(function ($v) {
                 return [
                     $v->date,
+                    "Voucher #{$v->id}", // 🔹 Added this to match <th>Voucher</th>
                     $v->debitAccount->name ?? 'N/A',
                     $v->creditAccount->name ?? 'N/A',
                     $this->fmt($v->amount)
