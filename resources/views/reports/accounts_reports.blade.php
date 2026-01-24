@@ -179,18 +179,34 @@
                     </thead>
                     <tbody>
                         @forelse ($reports[$key] ?? [] as $row)
+                            @php $data = (array)$row; @endphp
                             <tr>
-                                @foreach ($row as $col)
-                                    <td class="{{ is_numeric(str_replace([','], '', $col)) ? 'text-end' : '' }}">
-                                        {{ $col }}
-                                    </td>
-                                @endforeach
+                                @if ($key === 'journal_book')
+                                    {{-- Match these keys to your Controller's select statement --}}
+                                    <td>{{ $data['date'] ?? '' }}</td>
+                                    <td><strong>{{ $data['voucher_no'] ?? $data['reference'] ?? '' }}</strong></td>
+                                    <td><span class="text-success">{{ $data['debit_account'] ?? '' }}</span></td>
+                                    <td><span class="text-danger">{{ $data['credit_account'] ?? '' }}</span></td>
+                                    <td class="text-end fw-bold">{{ number_format($data['amount'] ?? 0, 2) }}</td>
+
+                                @elseif ($key === 'trial_balance')
+                                    <td>{{ $data['name'] ?? '' }}</td>
+                                    <td><span class="badge bg-secondary">{{ $data['type'] ?? '' }}</span></td>
+                                    <td class="text-end">{{ number_format($data['debit'] ?? 0, 2) }}</td>
+                                    <td class="text-end">{{ number_format($data['credit'] ?? 0, 2) }}</td>
+
+                                @else
+                                    {{-- Generic loop for simple reports --}}
+                                    @foreach ($row as $col)
+                                        <td class="{{ is_numeric(str_replace([','], '', $col)) ? 'text-end' : '' }}">
+                                            {{ $col }}
+                                        </td>
+                                    @endforeach
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="text-center text-muted">
-                                    No data found for selected dates.
-                                </td>
+                                <td colspan="10" class="text-center text-muted">No data found for selected dates.</td>
                             </tr>
                         @endforelse
                     </tbody>
