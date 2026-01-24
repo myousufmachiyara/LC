@@ -76,94 +76,45 @@ class PurchaseReportController extends Controller
         }
 
         /* ================= VENDOR-WISE PURCHASE ================= */
+        /* ================= VENDOR-WISE PURCHASE ================= */
         if ($tab === 'VWP') {
-            $query = PurchaseInvoice::with(['vendor','items.product'])
-                ->whereBetween('invoice_date', [$from, $to]);
+            $query = PurchaseInvoice::with(['vendor', 'items.product', 'items.variation']) // Add variation eager load if it exists
+            ->whereBetween('invoice_date', [$from, $to]);
 
             if ($request->filled('vendor_id')) {
                 $query->where('vendor_id', $request->vendor_id);
             }
 
             $vendorWisePurchase = $query->get()
-                ->groupBy('vendor_id')
-                ->map(function ($purchases) {
+            ->groupBy('vendor_id')
+            ->map(function ($purchases) {
+                $vendorName = $purchases->first()->vendor->name ?? 'Unknown Vendor';
+                $items = collect();
 
-                    $vendorName = $purchases->first()->vendor->name ?? 'Unknown Vendor';
-
-                    $items = collect();
-
-                    foreach ($purchases as $invoice) {
-                        foreach ($invoice->items as $item) {
-                            $items->push((object)[
-                                'invoice_date' => $invoice->invoice_date,
-                                'invoice_no'   => $invoice->bill_no ?? $invoice->invoice_no,
-                                'item_name'    => $item->product->name ?? 'N/A',
-                                'quantity'     => $item->quantity,
-                                'rate'         => $item->price,
-                                'total'        => $item->quantity * $item->price,
-                            ]);
-                        }
+                foreach ($purchases as $invoice) {
+                    foreach ($invoice->items as $item) {
+                        $items->push((object)[
+                            'invoice_date' => $invoice->invoice_date,
+                            'invoice_no'   => $invoice->bill_no ?? $invoice->invoice_no,
+                            'item_name'    => $item->product->name ?? 'N/A',
+                            // --- FIX START ---
+                            'variation'    => $item->variation->name ?? '-', // Adjust 'name' to your variation column
+                            // --- FIX END ---
+                            'quantity'     => $item->quantity,
+                            'rate'         => $item->price,
+                            'total'        => $item->quantity * $item->price,
+                        ]);
                     }
+                }
 
-                    return (object)[
-                        'vendor_name'  => $vendorName,
-                        'items'        => $items,
-                        'total_qty'    => $items->sum('quantity'),
-                        'total_amount' => $items->sum('total'),
-                    ];
-                })
-                ->values();
-        }
-
-        if ($tab === 'PB') {
-
-            $query = PurchaseBilty::with(['vendor','details.product','details.measurementUnit'])
-                ->whereBetween('bilty_date', [$from, $to]);
-
-            if ($request->filled('vendor_id')) {
-                $query->where('vendor_id', $request->vendor_id);
-            }
-
-            $vendorWiseBilty = $query->get()
-                ->groupBy('vendor_id')
-                ->map(function ($bilties) {
-
-                    $vendorName = $bilties->first()->vendor->name ?? 'Unknown Vendor';
-                    $items = collect();
-                    $totalQty = 0;
-                    $totalAmount = 0;
-
-                    foreach ($bilties as $bilty) {
-                        $totalBiltyQty = $bilty->details->sum('quantity');
-
-                        foreach ($bilty->details as $detail) {
-                            // Allocate bilty amount proportionally to item quantity
-                            $perUnitBilty = $bilty->bilty_amount / max($totalBiltyQty,1);
-                            $amount = $perUnitBilty * $detail->quantity;
-
-                            $items->push((object)[
-                                'bilty_date' => $bilty->bilty_date,
-                                'ref_no'     => $bilty->ref_no,
-                                'item_name'  => $detail->product->name ?? 'N/A',
-                                'quantity'   => $detail->quantity,
-                                'unit'       => $detail->measurementUnit->name ?? '',
-                                'rate'       => round($perUnitBilty,2),
-                                'total'      => round($amount,2),
-                            ]);
-
-                            $totalQty += $detail->quantity;
-                            $totalAmount += $amount;
-                        }
-                    }
-
-                    return (object)[
-                        'vendor_name'  => $vendorName,
-                        'items'        => $items,
-                        'total_qty'    => $totalQty,
-                        'total_amount' => $totalAmount,
-                    ];
-                })
-                ->values();
+                return (object)[
+                    'vendor_name'  => $vendorName,
+                    'items'        => $items,
+                    'total_qty'    => $items->sum('quantity'),
+                    'total_amount' => $items->sum('total'),
+                ];
+            })
+            ->values();
         }
 
         return view('reports.purchase_reports', compact(
