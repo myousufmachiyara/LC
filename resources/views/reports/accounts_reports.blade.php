@@ -184,10 +184,10 @@
                                 @if ($key === 'journal_book')
                                     {{-- Match these keys to your Controller's select statement --}}
                                     <td>{{ $data['date'] ?? '' }}</td>
-                                    <td><strong>{{ $data['voucher_no'] ?? $data['reference'] ?? '' }}</strong></td>
+                                    <td><strong>{{ $data['voucher_no'] ?? '' }}</strong></td>
                                     <td><span class="text-success">{{ $data['debit_account'] ?? '' }}</span></td>
                                     <td><span class="text-danger">{{ $data['credit_account'] ?? '' }}</span></td>
-                                    <td class="text-end fw-bold">{{ number_format($data['amount'] ?? 0, 2) }}</td>
+                                    <td class="text-end fw-bold">{{ $data['amount'] ?? '0.00' }}</td>
 
                                 @elseif ($key === 'trial_balance')
                                     <td>{{ $data['name'] ?? '' }}</td>
