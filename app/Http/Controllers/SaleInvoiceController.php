@@ -219,6 +219,7 @@ class SaleInvoiceController extends Controller
         $amountReceived = Voucher::where('ac_cr_sid', $invoice->account_id)
             ->where('remarks', 'LIKE', "%Invoice #{$invoice->invoice_no}%")
             ->sum('amount');
+        $locations = Location::all();
 
         return view('sales.edit', [
             'invoice' => $invoice,
@@ -226,6 +227,7 @@ class SaleInvoiceController extends Controller
             'customers' => ChartOfAccounts::where('account_type', 'customer')->get(),
             'paymentAccounts' => ChartOfAccounts::whereIn('account_type', ['cash', 'bank'])->get(),
             'amountReceived' => $amountReceived,
+            'locations' => $locations
         ]);
     }
 
