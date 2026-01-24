@@ -242,7 +242,7 @@ class SaleInvoiceController extends Controller
             'items'                => 'required|array|min:1',
             'items.*.product_id'   => 'required|exists:products,id',
             'items.*.variation_id' => 'nullable|exists:product_variations,id',
-            'items.*.location_id' => 'required|exists:locations,id',            
+            'items.*.location_id'  => 'required|exists:locations,id',            
             'items.*.sale_price'   => 'required|numeric|min:0',
             'items.*.quantity'     => 'required|numeric|min:0.01',
             'payment_account_id'   => 'nullable|exists:chart_of_accounts,id',
@@ -251,10 +251,10 @@ class SaleInvoiceController extends Controller
 
         DB::beginTransaction();
         try {
-            $invoice = SaleInvoice::findOrFail($id);
+            $invoice = SaleInvoice::with('items')->findOrFail($id);
             $invoiceNo = $invoice->invoice_no;
 
-            // 1. Update Invoice Header
+            // 2. Update Invoice Header
             $invoice->update([
                 'date'       => $validated['date'],
                 'account_id' => $validated['account_id'],
@@ -263,10 +263,9 @@ class SaleInvoiceController extends Controller
                 'remarks'    => $validated['remarks'],
             ]);
 
-            // 2. Clear Existing Items (Stock "returns" to pool via this deletion)
+            // 3. Clear existing items and Re-insert
             $invoice->items()->delete();
-
-            // 3. Re-insert Items & Calculate Variation-Specific COGS
+            
             $totalBill = 0;
             $totalCost = 0;
 
@@ -275,7 +274,7 @@ class SaleInvoiceController extends Controller
                     'sale_invoice_id' => $invoice->id,
                     'product_id'      => $item['product_id'],
                     'variation_id'    => $item['variation_id'] ?? null,
-                    'location_id'     => $item['location_id'], // Save location per item
+                    'location_id'     => $item['location_id'],
                     'sale_price'      => $item['sale_price'],
                     'quantity'        => $item['quantity'],
                     'discount'        => 0,
@@ -283,22 +282,13 @@ class SaleInvoiceController extends Controller
 
                 $totalBill += ($item['sale_price'] * $item['quantity']);
 
-                // --- Enhanced COGS Logic (Variation Sensitive) ---
+                // COGS Logic
                 $latestPurchase = PurchaseInvoiceItem::where('item_id', $item['product_id'])
-                ->when(!empty($item['variation_id']), function($q) use ($item) {
-                    return $q->where('variation_id', $item['variation_id']);
-                })
-                ->with('invoice')
-                ->latest()
-                ->first();
-
-                // Fallback if variation specific purchase not found
-                if (!$latestPurchase && !empty($item['variation_id'])) {
-                    $latestPurchase = PurchaseInvoiceItem::where('item_id', $item['product_id'])
-                        ->with('invoice')
-                        ->latest()
-                        ->first();
-                }
+                    ->when(!empty($item['variation_id']), function($q) use ($item) {
+                        return $q->where('variation_id', $item['variation_id']);
+                    })
+                    ->latest()
+                    ->first();
 
                 if ($latestPurchase && $latestPurchase->purchaseInvoice) {
                     $unitPurchasePrice = $latestPurchase->purchase_price;
@@ -315,14 +305,15 @@ class SaleInvoiceController extends Controller
             $netTotal = $totalBill - ($validated['discount'] ?? 0);
             $invoice->update(['net_amount' => $netTotal]);
 
-            // 4. Update Financial Vouchers
-            Voucher::where('reference', (string)$invoice->id)->whereRaw("reference REGEXP '^[0-9]+$'") ->delete();
+            // 4. Update Financial Vouchers (Sales & COGS)
+            // Note: We only delete Journal vouchers here, not the Receipt one
+            Voucher::where('reference', (string)$invoice->id)->where('voucher_type', 'journal')->delete();
 
             $inventoryAc = ChartOfAccounts::where('name', 'Stock in Hand')->first();
             $cogsAc      = ChartOfAccounts::where('account_type', 'cogs')->first();
             $salesAc     = ChartOfAccounts::where('account_type', 'revenue')->first();
 
-            // Voucher A: Sales (Customer Dr / Sales Cr)
+            // Journal: Sales
             Voucher::create([
                 'voucher_type' => 'journal',
                 'date'         => $validated['date'],
@@ -333,7 +324,7 @@ class SaleInvoiceController extends Controller
                 'reference'    => $invoice->id,
             ]);
 
-            // Voucher B: COGS (COGS Dr / Inventory Cr)
+            // Journal: COGS
             if ($inventoryAc && $cogsAc && $totalCost > 0) {
                 Voucher::create([
                     'voucher_type' => 'journal',
@@ -346,25 +337,35 @@ class SaleInvoiceController extends Controller
                 ]);
             }
 
-            // 5. Payment Receipt
-            if ($request->filled('payment_account_id') && $request->amount_received > 0) {
-                Voucher::create([
-                    'voucher_type' => 'receipt',
+            // 5. UPDATE OR CREATE RECEIPT VOUCHER
+            $paymentVoucher = Voucher::where('reference', (string)$invoice->id)->where('voucher_type', 'receipt')->first();
+
+            if ($request->filled('amount_received') && $request->amount_received > 0 && $request->filled('payment_account_id')) {
+                $receiptData = [
                     'date'         => $validated['date'],
                     'ac_dr_sid'    => $validated['payment_account_id'],
                     'ac_cr_sid'    => $validated['account_id'],
                     'amount'       => $validated['amount_received'],
                     'remarks'      => "Payment for Invoice #{$invoiceNo}",
                     'reference'    => $invoice->id,
-                ]);
+                ];
+
+                if ($paymentVoucher) {
+                    $paymentVoucher->update($receiptData);
+                } else {
+                    Voucher::create(array_merge(['voucher_type' => 'receipt'], $receiptData));
+                }
+            } elseif ($paymentVoucher) {
+                // If the user cleared the amount or account, remove the payment record
+                $paymentVoucher->delete();
             }
 
             DB::commit();
-            return redirect()->route('sale_invoices.index')->with('success', 'Invoice updated successfully.');
+            return redirect()->route('sale_invoices.index')->with('success', 'Invoice and Payment updated successfully.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Invoice Update Error: " . $e->getMessage());
+            \Log::error("Invoice Update Error: " . $e->getMessage());
             return back()->with('error', 'Update Failed: ' . $e->getMessage())->withInput();
         }
     }
