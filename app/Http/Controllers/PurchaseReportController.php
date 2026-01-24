@@ -98,7 +98,7 @@ class PurchaseReportController extends Controller
                             'invoice_no'   => $invoice->bill_no ?? $invoice->invoice_no,
                             'item_name'    => $item->product->name ?? 'N/A',
                             // --- FIX START ---
-                            'variation'    => $item->variation->name ?? '-', // Adjust 'name' to your variation column
+                            'variation'    => $item->variation->sku ?? '-', // Adjust 'name' to your variation column
                             // --- FIX END ---
                             'quantity'     => $item->quantity,
                             'rate'         => $item->price,
