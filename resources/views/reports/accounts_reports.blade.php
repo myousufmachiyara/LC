@@ -108,7 +108,9 @@
                         @elseif ($key === 'balance_sheet')
                             <tr>
                                 <th>Assets</th>
+                                <th>Amount</th>
                                 <th>Liabilities</th>
+                                <th>Amount</th>
                             </tr>
                         @elseif ($key === 'party_ledger')
                             <tr>
