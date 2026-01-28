@@ -179,9 +179,6 @@
               @can('reports.accounts')
                 <li><a class="nav-link" href="{{ route('reports.accounts') }}">Accounts</a></li>
               @endcan
-              @can('reports.summary')
-                <li><a class="nav-link" href="{{ route('reports.summary') }}">Summary</a></li>
-              @endcan
             </ul>
           </li>
           @endif

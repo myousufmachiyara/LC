@@ -15,6 +15,8 @@ use App\Models\ProductCategory;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\ProductSubcategory;
+use App\Models\Location;
+use App\Models\Product;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
@@ -47,8 +49,8 @@ class DatabaseSeeder extends Seeder
             'users',
 
             // Accounts
-            'coa',
-            'shoa',
+            // 'coa',
+            // 'shoa',
 
             // Products
             'products',
@@ -61,15 +63,15 @@ class DatabaseSeeder extends Seeder
             'stock_transfer',
 
             // Purchases
-            'purchase_invoices',
-            'purchase_return',
+            // 'purchase_invoices',
+            // 'purchase_return',
 
             // Sales
-            'sale_invoices',
-            'sale_return',
+            // 'sale_invoices',
+            // 'sale_return',
 
             // Vouchers
-            'vouchers',
+            // 'vouchers',
         ];
 
         $actions = ['index', 'create', 'edit', 'delete', 'print'];
@@ -83,7 +85,8 @@ class DatabaseSeeder extends Seeder
         }
 
         // 📊 Report permissions (only view access, no CRUD)
-        $reports = ['inventory', 'purchase', 'sales', 'accounts'];
+        // $reports = ['inventory', 'purchase', 'sales', 'accounts'];
+        $reports = ['inventory'];
 
         foreach ($reports as $report) {
             Permission::firstOrCreate([
@@ -155,28 +158,170 @@ class DatabaseSeeder extends Seeder
             ['id' => 1, 'name' => 'Kilogram', 'shortcode' => 'kg'],
             ['id' => 2, 'name' => 'Meter', 'shortcode' => 'm'],
             ['id' => 3, 'name' => 'Pieces', 'shortcode' => 'pcs'],
+            ['id' => 4, 'name' => 'Bag', 'shortcode' => 'bag'],
+            ['id' => 5, 'name' => 'Bundle', 'shortcode' => 'bundle'],
         ]);
 
         // 📦 Product Categories
         ProductCategory::insert([
             ['id' => 1, 'name' => 'Net',   'code' => 'net', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'name' => 'Rope',  'code' => 'rope', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        // Size Attribute
-        $size = Attribute::create([
-            'name' => 'Size',
-            'slug' => Str::slug('Size'),
+        // --- Mesh Size Attribute ---
+        $meshSizeAttr = Attribute::create([
+            'name' => 'Mesh Size',
+            'slug' => Str::slug('mesh-size'),
         ]);
 
         $sizes = [
-            '30 ply', '24 ply'
+            '8000mm', '6000mm', '4000mm', '3000mm', '2400mm', '1600mm', '1200mm', '1000mm', 
+            '800', '600mm', '560mm', '480mm', '400mm', '320mm', '240mm', '200mm', '160mm', 
+            '120mm', '80mm', '60mm', '40mm', '30mm', '25mm', '20mm'
         ];
 
         foreach ($sizes as $sz) {
             AttributeValue::create([
-                'attribute_id' => $size->id,
+                'attribute_id' => $meshSizeAttr->id,
                 'value' => $sz,
             ]);
+        }
+
+        // --- Thickness Attribute ---
+        $thicknessAttr = Attribute::create([
+            'name' => 'Thickness', // Corrected spelling from 'Thickess'
+            'slug' => Str::slug('thickness'),
+        ]);
+
+        $thicknessValues = [
+            '51ply', '36ply', '24ply', '18ply', '20mm', '18mm', '16mm', '14mm', '8mm', '33ply'        
+        ];
+
+        foreach ($thicknessValues as $tk) {
+            AttributeValue::create([
+                'attribute_id' => $thicknessAttr->id, // Reference the Attribute model ID
+                'value' => $tk,
+            ]);
+        }
+
+        // 🏠 Locations (Godowns)
+        $locations = [
+            [
+                'id' => 1, 
+                'name' => 'Naveed Godown', 
+                'code' => 'naveed-godown', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+            [
+                'id' => 2, 
+                'name' => 'W.W godown', 
+                'code' => 'ww-godown', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+            [
+                'id' => 3, 
+                'name' => 'Hafiz Center Godown', 
+                'code' => 'hafiz-center', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+        ];
+
+        foreach ($locations as $loc) {
+            Location::updateOrCreate(['id' => $loc['id']], $loc);
+        }
+        // 🛠 Products
+        $products = [
+            [
+                'id' => 1,
+                'category_id' => 1,
+                'subcategory_id' => null,
+                'name' => 'HDPE',
+                'sku' => 'HDPE-NET',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4, // Bag
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 2,
+                'category_id' => 2,
+                'subcategory_id' => null,
+                'name' => 'HDPE TWINE',
+                'sku' => 'HDPE-TWINE-ROPE',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 3,
+                'category_id' => 2,
+                'subcategory_id' => null,
+                'name' => 'PE',
+                'sku' => 'PE-ROPE',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 4,
+                'category_id' => 1,
+                'subcategory_id' => null,
+                'name' => 'POLYSTER',
+                'sku' => 'POLYSTER-NET',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 5,
+                'category_id' => 1,
+                'subcategory_id' => null,
+                'name' => 'NYLON',
+                'sku' => 'NYLON-NET',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 6,
+                'category_id' => 1,
+                'subcategory_id' => null,
+                'name' => 'MONO',
+                'sku' => 'MONO-NET',
+                'description' => null,
+                'opening_stock' => 0.00,
+                'selling_price' => 0.00,
+                'measurement_unit' => 4,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ];
+
+        foreach ($products as $product) {
+            Product::updateOrCreate(['id' => $product['id']], $product);
         }
     }
 }

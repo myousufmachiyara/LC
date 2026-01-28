@@ -242,7 +242,7 @@
         let cleanCat = categoryName.replace(/\s+/g, '-').toUpperCase();
         let cleanProd = productName.replace(/\s+/g, '-').toUpperCase();
 
-        $('#sku').val(`${cleanCat}-${cleanProd}`);
+        $('#sku').val(`${cleanProd}-${cleanCat}`);
     }
 
     // Trigger SKU generation when Name changes or Category changes
