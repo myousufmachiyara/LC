@@ -25,7 +25,7 @@ use App\Http\Controllers\{
     LocationController,
     StockTransferController,
     ProductSubcategoryController,
-    
+    PDCController,    
 };
 
 Auth::routes();
@@ -39,21 +39,12 @@ Route::middleware(['auth'])->group(function () {
 
     // Product Helpers
     Route::get('/products/details', [ProductController::class, 'details'])->name('products.receiving');
-    Route::get('/products/barcode-selection', [ProductController::class, 'barcodeSelection'])->name('products.barcode.selection');
-    Route::post('/products/generate-multiple-barcodes', [ProductController::class, 'generateMultipleBarcodes'])->name('products.generateBarcodes');
-    Route::get('/get-product-by-code/{barcode}', [ProductController::class, 'getByBarcode'])->name('product.byBarcode');
     Route::get('/product/{product}/variations', [ProductController::class, 'getVariations'])->name('product.variations');
-    Route::get('/product/{product}/productions', [ProductionController::class, 'getProductProductions'])->name('product.productions');
-    Route::post('/products/bulk-upload', [ProductController::class, 'bulkUploadStore'])->name('products.bulk-upload.store');
-    Route::get('/products/bulk-upload/template', [ProductController::class, 'bulkUploadTemplate'])->name('products.bulk-upload.template');
     Route::get('/get-subcategories/{category_id}', [ProductCategoryController::class, 'getSubcategories'])->name('products.getSubcategories');
 
     //Purchase Helper
     Route::get('/product/{product}/invoices', [PurchaseInvoiceController::class, 'getProductInvoices']);
 
-    // Production Summary
-    Route::get('/production-summary/{id}', [ProductionController::class, 'summary'])->name('production.summary');
-    Route::get('/production-gatepass/{id}', [ProductionController::class, 'printGatepass'])->name('production.gatepass');
     // Common Modules
     $modules = [
         // User Management
@@ -85,6 +76,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Vouchers
         'vouchers' => ['controller' => VoucherController::class, 'permission' => 'vouchers'],
+        'pdc' => ['controller' => PDCController::class, 'permission' => 'pdc'],
+
     ];
 
     foreach ($modules as $uri => $config) {

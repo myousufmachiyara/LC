@@ -85,7 +85,7 @@
                 <li><a class="nav-link" href="{{ route('locations.index') }}">Locations</a></li>
               @endcan
               @can('stock_transfer.index')
-                <li><a class="nav-link" href="{{ route('stock_transfer.index') }}">Transfer</a></li>
+                <li><a class="nav-link" href="{{ route('stock_transfer.index') }}">Stock In/Out</a></li>
               @endcan
             </ul>
           </li>
@@ -149,6 +149,15 @@
             </li>
           @endif
 
+          {{-- Post-Dated Cheques (PDC) --}}
+          @if(auth()->user()->can('pdc.index'))
+          <li class="{{ request()->routeIs('pdc.*') ? 'active' : '' }}">
+              <a class="nav-link" href="{{ route('pdc.index') }}">
+                  <i class="fa fa-envelope-open-text" aria-hidden="true"></i>
+                  <span>PDC Management</span>
+              </a>
+          </li>
+          @endif
 
           {{-- Reports --}}
           @if(

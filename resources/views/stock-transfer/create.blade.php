@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Stock Transfer | Create')
+@section('title', 'Stock In/Out | Create')
 
 @section('content')
 <div class="row">
@@ -10,7 +10,7 @@
     <div class="col-12 mb-2">
       <section class="card">
         <header class="card-header">
-          <h2 class="card-title">Create Stock Transfer</h2>
+          <h2 class="card-title">Create Stock In/Out</h2>
           @if ($errors->any())
             <div class="alert alert-danger">
               <ul class="mb-0">
@@ -57,39 +57,47 @@
     <div class="col-12">
       <section class="card">
         <header class="card-header">
-          <h2 class="card-title">Transfer Items</h2>
+          <h2 class="card-title">Items In/Out</h2>
         </header>
         <div class="card-body">
           <table class="table table-bordered" id="itemTable">
-            <thead>
-              <tr>
-                <th width="15%">Item Code</th>
-                <th>Product</th>
-                <th>Variation</th>
-                <th width="12%">Qty</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><input type="text" class="form-control product-code" placeholder="Scan/Enter Code"></td>
-                <td>
-                  <select name="items[0][product_id]" class="form-control select2-js product-select" required>
-                    <option value="">Select Product</option>
-                    @foreach($products as $product)
-                      <option value="{{ $product->id }}" data-price="{{ $product->selling_price }}">{{ $product->name }}</option>
-                    @endforeach
-                  </select>
-                </td>
-                <td>
-                  <select name="items[0][variation_id]" class="form-control select2-js variation-select">
-                    <option value="">Select Variation</option>
-                  </select>
-                </td>
-                <td><input type="number" name="items[0][quantity]" class="form-control quantity" step="any" required></td>
-                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
-              </tr>
-            </tbody>
+              <thead>
+                  <tr>
+                      <th>Product</th>
+                      <th>Variation</th>
+                      <th width="18%">Qty</th> <th></th>
+                  </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <select name="items[0][product_id]" class="form-control select2-js product-select" required>
+                      <option value="">Select Product</option>
+                      @foreach($products as $product)
+                          {{-- Added data-unit attribute here --}}
+                          <option value="{{ $product->id }}" 
+                                  data-price="{{ $product->selling_price }}" 
+                                  data-unit="{{ $product->measurementUnit->name ?? '' }}">
+                              {{ $product->name }}
+                          </option>
+                      @endforeach
+                    </select>
+                  </td>
+                  <td>
+                    <select name="items[0][variation_id]" class="form-control select2-js variation-select">
+                      <option value="">Select Variation</option>
+                    </select>
+                  </td>
+                  <td>
+                      {{-- Updated to include the Unit Display --}}
+                      <div class="input-group">
+                          <input type="number" name="items[0][quantity]" class="form-control quantity" step="any" required>
+                          <input type="text" class="form-control part-unit-name" style="width:60px; flex:none;" readonly placeholder="Unit">
+                      </div>
+                  </td>
+                  <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
+                </tr>
+              </tbody>
           </table>
           <button type="button" class="btn btn-success btn-sm" onclick="addRow()">+ Add Item</button>
         </div>
@@ -110,125 +118,64 @@
 
     // 🔹 Manual Product selection flow
     $(document).on('change', '.product-select', function () {
-      const row = $(this).closest('tr');
-      const productId = $(this).val();
-      const preselectVariationId = $(this).data('preselectVariationId') || null;
-      $(this).removeData('preselectVariationId');
-
-      if (productId) {
-        loadVariations(row, productId, preselectVariationId);
-      } else {
-        row.find('.variation-select')
-          .html('<option value="">Select Variation</option>')
-          .prop('disabled', false)
-          .trigger('change');
-      }
-    });
-
-    // 🔹 Barcode scanning flow
-    $(document).on('blur', '.product-code', function () {
-      const row = $(this).closest('tr');
-      const barcode = $(this).val().trim();
-      if (!barcode) return;
-
-      $.ajax({
-        url: '/get-product-by-code/' + encodeURIComponent(barcode),
-        method: 'GET',
-        success: function (res) {
-          if (!res.success) {
-            alert(res.message || 'Not found');
-            row.find('.product-code').val('').focus();
-            return;
-          }
-
-          const $productSelect = row.find('.product-select');
-          const $variationSelect = row.find('.variation-select');
-
-          if (res.type === 'variation') {
-            const variation = res.variation;
-
-            // ✅ Set product
-            $productSelect.val(variation.product_id).trigger('change.select2');
-
-            // ✅ Directly set variation
-            $variationSelect.html(`<option value="${variation.id}" selected>${variation.sku}</option>`)
-                            .prop('disabled', false)
-                            .trigger('change');
-
-            // ✅ Focus Qty field
-            row.find('.quantity').focus();
-          }
-
-          if (res.type === 'product') {
-            const product = res.product;
-
-            // ✅ Set product
-            $productSelect.val(product.id).trigger('change.select2');
-
-            // ✅ Load variations normally
-            loadVariations(row, product.id);
-
-            // focus on variation after loading
-            setTimeout(() => {
-              $variationSelect.focus();
-            }, 300);
-          }
-        },
-        error: function () {
-          alert('Error fetching product details.');
-        }
-      });
-    });
-
-    // 🔹 POS: Auto-add row when user presses Enter on Qty
-    $(document).on('keypress', '.quantity', function (e) {
-      if (e.which === 13) { // Enter key
-        e.preventDefault();
         const row = $(this).closest('tr');
-        const qty = $(this).val().trim();
+        const productId = $(this).val();
+        
+        // --- NEW LOGIC FOR UNIT ---
+        const selectedOption = $(this).find(':selected');
+        const unitName = selectedOption.data('unit') || '';
+        row.find('.part-unit-name').val(unitName);
+        // ---------------------------
 
-        if (qty !== '') {
-          // Add new row
-          addRow();
+        const preselectVariationId = $(this).data('preselectVariationId') || null;
+        $(this).removeData('preselectVariationId');
 
-          // Focus on new row's barcode
-          const $newRow = $('#itemTable tbody tr').last();
-          $newRow.find('.product-code').focus();
+        if (productId) {
+            loadVariations(row, productId, preselectVariationId);
         } else {
-          alert("Please enter quantity first.");
-          $(this).focus();
+            row.find('.variation-select')
+                .html('<option value="">Select Variation</option>')
+                .prop('disabled', false)
+                .trigger('change');
         }
-      }
     });
 
   });
 
   // 🔹 Add Row
   function addRow() {
-    const idx = rowIndex++;
-    const rowHtml = `
-      <tr>
-        <td><input type="text" class="form-control product-code" placeholder="Scan/Enter Code"></td>
-        <td>
-          <select name="items[${idx}][product_id]" class="form-control select2-js product-select" required>
-            <option value="">Select Product</option>
-            @foreach($products as $product)
-              <option value="{{ $product->id }}" data-price="{{ $product->selling_price }}">{{ $product->name }}</option>
-            @endforeach
-          </select>
-        </td>
-        <td>
-          <select name="items[${idx}][variation_id]" class="form-control select2-js variation-select">
-            <option value="">Select Variation</option>
-          </select>
-        </td>
-        <td><input type="number" name="items[${idx}][quantity]" class="form-control quantity" step="any" required></td>
-        <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
-      </tr>
-    `;
-    $('#itemTable tbody').append(rowHtml);
-    const $newRow = $('#itemTable tbody tr').last();
-    $newRow.find('.select2-js').select2({ width: '100%', dropdownAutoWidth: true });
+      const idx = rowIndex++;
+      const rowHtml = `
+        <tr>
+          <td>
+            <select name="items[${idx}][product_id]" class="form-control select2-js product-select" required>
+              <option value="">Select Product</option>
+              @foreach($products as $product)
+                <option value="{{ $product->id }}" 
+                        data-price="{{ $product->selling_price }}" 
+                        data-unit="{{ $product->measurementUnit->name ?? '' }}">
+                  {{ $product->name }}
+                </option>
+              @endforeach
+            </select>
+          </td>
+          <td>
+            <select name="items[${idx}][variation_id]" class="form-control select2-js variation-select">
+              <option value="">Select Variation</option>
+            </select>
+          </td>
+          <td>
+            <div class="input-group">
+              <input type="number" name="items[${idx}][quantity]" class="form-control quantity" step="any" required>
+              <input type="text" class="form-control part-unit-name" style="width:60px; flex:none;" readonly placeholder="Unit">
+            </div>
+          </td>
+          <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
+        </tr>
+      `;
+      $('#itemTable tbody').append(rowHtml);
+      const $newRow = $('#itemTable tbody tr').last();
+      $newRow.find('.select2-js').select2({ width: '100%', dropdownAutoWidth: true });
   }
 
   // 🔹 Remove Row

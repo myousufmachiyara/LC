@@ -29,141 +29,155 @@ class InventoryReportController extends Controller
 
         // ================= ITEM LEDGER =================
         if ($tab == 'IL' && $itemId) {
+            // 1. Calculate Opening Balance
             $opPurchase = DB::table('purchase_invoice_items')
                 ->join('purchase_invoices', 'purchase_invoice_items.purchase_invoice_id', '=', 'purchase_invoices.id')
-                ->where('purchase_invoice_items.item_id', $itemId)
-                ->where('purchase_invoices.invoice_date', '<', $from)->sum('purchase_invoice_items.quantity');
+                ->where('item_id', $itemId)
+                ->whereNull('purchase_invoices.deleted_at') // Filter deleted invoices
+                ->when($locationId, fn($q) => $q->where('location_id', $locationId))
+                ->where('invoice_date', '<', $from)->sum('quantity');
 
             $opSale = DB::table('sale_invoice_items')
                 ->join('sale_invoices', 'sale_invoice_items.sale_invoice_id', '=', 'sale_invoices.id')
-                ->where('sale_invoice_items.product_id', $itemId)
-                ->where('sale_invoices.date', '<', $from)->sum('sale_invoice_items.quantity');
+                ->where('product_id', $itemId)
+                ->whereNull('sale_invoices.deleted_at') // Filter deleted sales
+                ->when($locationId, fn($q) => $q->where('location_id', $locationId))
+                ->where('date', '<', $from)->sum('quantity');
 
-            $openingQty = $opPurchase - $opSale;
+            $opTransIn = DB::table('stock_transfer_details')
+                ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                ->where('product_id', $itemId)
+                ->whereNull('stock_transfers.deleted_at') // Filter deleted transfers
+                ->when($locationId, fn($q) => $q->where('to_location_id', $locationId))
+                ->where('date', '<', $from)->sum('quantity');
 
+            $opTransOut = DB::table('stock_transfer_details')
+                ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                ->where('product_id', $itemId)
+                ->whereNull('stock_transfers.deleted_at') // Filter deleted transfers
+                ->when($locationId, fn($q) => $q->where('from_location_id', $locationId))
+                ->where('date', '<', $from)->sum('quantity');
+
+            $openingQty = ($opPurchase + $opTransIn) - ($opSale + $opTransOut);
+
+            // 2. Current Period Transactions (Add whereNull to all unions)
             $purchases = DB::table('purchase_invoice_items')
                 ->join('purchase_invoices', 'purchase_invoice_items.purchase_invoice_id', '=', 'purchase_invoices.id')
-                ->join('products', 'purchase_invoice_items.item_id', '=', 'products.id')
-                ->select(
-                    'purchase_invoices.invoice_date as date', 
-                    DB::raw("'Purchase' as type"), 
-                    'purchase_invoices.invoice_no as description', 
-                    'purchase_invoice_items.quantity as qty_in', 
-                    DB::raw("0 as qty_out"),
-                    'products.name as product',
-                    DB::raw("'' as variation")
-                )
-                ->where('purchase_invoice_items.item_id', $itemId)
-                ->whereBetween('purchase_invoices.invoice_date', [$from, $to]);
+                ->select('invoice_date as date', DB::raw("'Purchase' as type"), 'invoice_no as description', 'quantity as qty_in', DB::raw("0 as qty_out"))
+                ->where('item_id', $itemId)
+                ->whereNull('purchase_invoices.deleted_at')
+                ->when($locationId, fn($q) => $q->where('location_id', $locationId))
+                ->whereBetween('invoice_date', [$from, $to]);
 
-            $itemLedger = DB::table('sale_invoice_items')
+            $sales = DB::table('sale_invoice_items')
                 ->join('sale_invoices', 'sale_invoice_items.sale_invoice_id', '=', 'sale_invoices.id')
-                ->join('products', 'sale_invoice_items.product_id', '=', 'products.id')
-                ->select(
-                    'sale_invoices.date as date', 
-                    DB::raw("'Sale' as type"), 
-                    'sale_invoices.invoice_no as description', 
-                    DB::raw("0 as qty_in"), 
-                    'sale_invoice_items.quantity as qty_out',
-                    'products.name as product',
-                    DB::raw("'' as variation")
-                )
-                ->where('sale_invoice_items.product_id', $itemId)
-                ->whereBetween('sale_invoices.date', [$from, $to])
-                ->union($purchases)
-                ->orderBy('date', 'asc')
-                ->get()
-                ->map(fn($item) => (array)$item);
+                ->select('date', DB::raw("'Sale' as type"), 'invoice_no as description', DB::raw("0 as qty_in"), 'quantity as qty_out')
+                ->where('product_id', $itemId)
+                ->whereNull('sale_invoices.deleted_at')
+                ->when($locationId, fn($q) => $q->where('location_id', $locationId))
+                ->whereBetween('date', [$from, $to]);
+
+            $transIn = DB::table('stock_transfer_details')
+                ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                ->select('date', DB::raw("'Transfer IN' as type"), DB::raw("'Internal Movement' as description"), 'quantity as qty_in', DB::raw("0 as qty_out"))
+                ->where('product_id', $itemId)
+                ->whereNull('stock_transfers.deleted_at')
+                ->when($locationId, fn($q) => $q->where('to_location_id', $locationId))
+                ->whereBetween('date', [$from, $to]);
+
+            $transOut = DB::table('stock_transfer_details')
+                ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                ->select('date', DB::raw("'Transfer OUT' as type"), DB::raw("'Internal Movement' as description"), DB::raw("0 as qty_in"), 'quantity as qty_out')
+                ->where('product_id', $itemId)
+                ->whereNull('stock_transfers.deleted_at')
+                ->when($locationId, fn($q) => $q->where('from_location_id', $locationId))
+                ->whereBetween('date', [$from, $to]);
+
+            $itemLedger = $purchases->union($sales)->union($transIn)->union($transOut)
+                ->orderBy('date', 'asc')->get()->map(fn($item) => (array)$item);
         }
 
-        // ================= STOCK IN HAND (Location-Wise) =================
+        // ================= STOCK IN HAND =================
         if ($tab == 'SR') {
             $stockInHand = DB::table('products')
-                ->select('products.id', 'products.name as product_name')
-                ->when($itemId, fn($q) => $q->where('products.id', $itemId))
+                ->select('id', 'name')
+                ->when($itemId, fn($q) => $q->where('id', $itemId))
                 ->get()
                 ->flatMap(function ($product) use ($locationId, $locations, $costingMethod) {
+                    $targetLocs = $locationId ? $locations->where('id', $locationId) : $locations;
                     
-                    $targetLocations = $locationId ? $locations->where('id', $locationId) : $locations;
-
-                    return $targetLocations->map(function ($loc) use ($product, $costingMethod) {
-                        // Qty In: Purchases (location_id is in the items table)
-                        $tIn = DB::table('purchase_invoice_items')
-                            ->where('item_id', $product->id)
-                            ->where('location_id', $loc->id) 
+                    return $targetLocs->map(function ($loc) use ($product, $costingMethod) {
+                        $pIn = DB::table('purchase_invoice_items')
+                            ->where(['item_id' => $product->id, 'location_id' => $loc->id])
                             ->sum('quantity');
 
-                        // Qty In: Transfers TO this location
-                        $trIn = DB::table('stock_transfer_details')
-                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                            ->where('stock_transfer_details.product_id', $product->id)
-                            ->where('stock_transfers.to_location_id', $loc->id)
+                        $sOut = DB::table('sale_invoice_items')
+                            ->where(['product_id' => $product->id, 'location_id' => $loc->id])
                             ->sum('quantity');
 
-                        // Qty Out: Sales (location_id is in the items table)
-                        $tOut = DB::table('sale_invoice_items')
-                            ->where('product_id', $product->id)
-                            ->where('location_id', $loc->id) 
-                            ->sum('quantity');
+                        // FIXED JOINS BELOW: Specify table names to avoid ambiguity
+                        $tIn = DB::table('stock_transfer_details')
+                        ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                        ->whereNull('stock_transfers.deleted_at') // Added check
+                        ->where(['product_id' => $product->id, 'to_location_id' => $loc->id])
+                        ->sum('quantity');
 
-                        // Qty Out: Transfers FROM this location
-                        $trOut = DB::table('stock_transfer_details')
-                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                            ->where('stock_transfer_details.product_id', $product->id)
-                            ->where('stock_transfers.from_location_id', $loc->id)
-                            ->sum('quantity');
+                        $tOut = DB::table('stock_transfer_details')
+                        ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                        ->whereNull('stock_transfers.deleted_at') // Added check
+                        ->where(['product_id' => $product->id, 'from_location_id' => $loc->id])
+                        ->sum('quantity');
 
-                        $qty = ($tIn + $trIn) - ($tOut + $trOut);
-
+                        $qty = ($pIn + $tIn) - ($sOut + $tOut);
+                        
+                        // Only return rows with stock, or if specifically filtered by location
                         if ($qty == 0 && empty(request('location_id'))) return null;
 
-                        $priceQuery = DB::table('purchase_invoice_items')->where('item_id', $product->id);
-                        $price = match($costingMethod) {
-                            'latest' => $priceQuery->latest('id')->value('price'),
-                            'max' => $priceQuery->max('price'),
-                            'min' => $priceQuery->min('price'),
-                            default => $priceQuery->avg('price'),
-                        } ?? 0;
+                        $price = DB::table('purchase_invoice_items')
+                            ->where('item_id', $product->id)
+                            ->{ $costingMethod == 'latest' ? 'latest' : 'orderBy' }('id')
+                            ->{ $costingMethod == 'latest' ? 'value' : 'avg' }('price') ?? 0;
 
                         return [
-                            'product' => $product->product_name,
-                            'location' => $loc->name,
-                            'variation' => '-',
-                            'quantity' => $qty,
-                            'price' => $price,
+                            'product' => $product->name, 
+                            'location' => $loc->name, 
+                            'quantity' => $qty, 
+                            'price' => $price, 
                             'total' => $qty * $price
                         ];
                     });
                 })->filter()->values();
         }
 
-        // ================= STOCK TRANSFER =================
+        // ================= STOCK TRANSFERS =================
         if ($tab == 'STR') {
             $stockTransfers = DB::table('stock_transfers')
                 ->join('stock_transfer_details', 'stock_transfers.id', '=', 'stock_transfer_details.transfer_id')
                 ->join('products', 'stock_transfer_details.product_id', '=', 'products.id')
-                ->leftJoin('product_variations', 'stock_transfer_details.variation_id', '=', 'product_variations.id')
                 ->join('locations as from_loc', 'stock_transfers.from_location_id', '=', 'from_loc.id')
                 ->join('locations as to_loc', 'stock_transfers.to_location_id', '=', 'to_loc.id')
                 ->select(
-                    'stock_transfers.date as date', 
-                    'stock_transfers.id as reference',
+                    'stock_transfers.date', 
+                    'stock_transfers.id as reference', 
                     'products.name as product', 
-                    'product_variations.sku as variation',
                     'from_loc.name as from', 
-                    'to_loc.name as to',
+                    'to_loc.name as to', 
                     'stock_transfer_details.quantity'
                 )
+                ->whereNull('stock_transfers.deleted_at')
                 ->whereBetween('stock_transfers.date', [$from, $to])
-                ->when($request->from_location_id, fn($q) => $q->where('from_location_id', $request->from_location_id))
-                ->when($request->to_location_id, fn($q) => $q->where('to_location_id', $request->to_location_id))
-                ->get()
-                ->map(fn($item) => (array)$item);
+                ->when($request->from_location_id, function($q) use ($request) {
+                    return $q->where('stock_transfers.from_location_id', $request->from_location_id);
+                })
+                ->when($request->to_location_id, function($q) use ($request) {
+                    return $q->where('stock_transfers.to_location_id', $request->to_location_id);
+                })
+                ->get() // This returns a Collection of stdClass objects
+                ->map(function ($item) {
+                    return (array) $item; // Force conversion to array so $st['date'] works
+                });
         }
 
-        return view('reports.inventory_reports', compact(
-            'products', 'locations', 'itemLedger', 'openingQty', 
-            'stockInHand', 'stockTransfers', 'tab', 'from', 'to'
-        ));
+        return view('reports.inventory_reports', compact('products', 'locations', 'itemLedger', 'openingQty', 'stockInHand', 'stockTransfers', 'tab', 'from', 'to'));
     }
 }

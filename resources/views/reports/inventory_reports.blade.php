@@ -2,234 +2,236 @@
 @section('title', 'Inventory Reports')
 
 @section('content')
-<div class="tabs">
-    {{-- NAV TABS --}}
-    <ul class="nav nav-tabs">
-        <li class="nav-item"><a class="nav-link {{ $tab=='IL'?'active':'' }}" data-bs-toggle="tab" href="#IL">Item Ledger</a></li>
-        <li class="nav-item"><a class="nav-link {{ $tab=='SR'?'active':'' }}" data-bs-toggle="tab" href="#SR">Stock Inhand</a></li>
-        <li class="nav-item"><a class="nav-link {{ $tab=='STR'?'active':'' }}" data-bs-toggle="tab" href="#STR">Stock Transfer</a></li>
-    </ul>
+<div class="card">
+    <div class="card-header bg-white">
+        <ul class="nav nav-tabs card-header-tabs">
+            <li class="nav-item">
+                <a class="nav-link {{ $tab=='IL'?'active fw-bold':'' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'IL']) }}">Item Ledger</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ $tab=='SR'?'active fw-bold':'' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'SR']) }}">Stock Inhand</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ $tab=='STR'?'active fw-bold':'' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'STR']) }}">Stock Transfer</a>
+            </li>
+        </ul>
+    </div>
+    
+    <div class="card-body">
+        <div class="tab-content">
 
-    <div class="tab-content mt-3">
-
-        {{-- ITEM LEDGER --}}
-        <div id="IL" class="tab-pane fade {{ $tab=='IL'?'show active':'' }}">
-            <form method="GET" class="mb-3">
-                <input type="hidden" name="tab" value="IL">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label>Product</label>
-                        <select name="item_id" class="form-control">
-                            <option value="">-- All Products --</option>
-                            @foreach($products as $product)
-                                <option value="{{ $product->id }}" {{ request('item_id') == $product->id ? 'selected' : '' }}>
-                                    {{ $product->name }}
-                                </option>
-                                @foreach($product->variations as $var)
-                                    <option value="{{ $product->id }}-{{ $var->id }}" {{ request('item_id') == $product->id.'-'.$var->id ? 'selected' : '' }}>
-                                        {{ $product->name }} ({{ $var->sku }})
-                                    </option>
+            {{-- 1. ITEM LEDGER TAB --}}
+            <div id="IL" class="tab-pane fade {{ $tab=='IL'?'show active':'' }}">
+                <form method="GET" class="border p-3 bg-light rounded mb-4">
+                    <input type="hidden" name="tab" value="IL">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Product</label>
+                            <select name="item_id" class="form-select form-select-sm" required>
+                                <option value="">-- Select Product --</option>
+                                @foreach($products as $product)
+                                    <option value="{{ $product->id }}" {{ request('item_id') == $product->id ? 'selected' : '' }}>{{ $product->name }}</option>
                                 @endforeach
-                            @endforeach
-                        </select>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Location (Optional)</label>
+                            <select name="location_id" class="form-select form-select-sm">
+                                <option value="">-- All Locations --</option>
+                                @foreach($locations as $loc)
+                                    <option value="{{ $loc->id }}" {{ request('location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small fw-bold">From</label>
+                            <input type="date" name="from_date" value="{{ $from }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small fw-bold">To</label>
+                            <input type="date" name="to_date" value="{{ $to }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">Filter Ledger</button>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label>From Date</label>
-                        <input type="date" name="from_date" value="{{ request('from_date', $from) }}" class="form-control">
-                    </div>
-                    <div class="col-md-3">
-                        <label>To Date</label>
-                        <input type="date" name="to_date" value="{{ request('to_date', $to) }}" class="form-control">
-                    </div>
+                </form>
 
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Filter</button>
-                    </div>
-                </div>
-            </form>
-
-            @php
-                $totalIn  = collect($itemLedger)->sum('qty_in');
-                $totalOut = collect($itemLedger)->sum('qty_out');
-                $balance  = $totalIn - $totalOut;
-            @endphp
-
-            <div class="mb-3 text-end">
-                <h5 class="card-title">Closing Balance: <span class="text-danger">{{ $balance }}</span></h5>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Qty In</th>
+                            <th>Qty Out</th>
+                            <th>Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if(request('item_id'))
+                            <tr class="table-info">
+                                <td colspan="5" class="text-end fw-bold">Opening Balance:</td>
+                                <td class="fw-bold">{{ $openingQty }}</td>
+                            </tr>
+                            @php $currentBal = $openingQty; @endphp
+                            @forelse($itemLedger as $row)
+                                @php $currentBal += ($row['qty_in'] - $row['qty_out']); @endphp
+                                <tr>
+                                    <td>{{ $row['date'] }}</td>
+                                    <td><span class="badge {{ $row['qty_in'] > 0 ? 'bg-success' : 'bg-danger' }}">{{ $row['type'] }}</span></td>
+                                    <td>{{ $row['description'] }}</td>
+                                    <td class="text-success">{{ $row['qty_in'] ?: '-' }}</td>
+                                    <td class="text-danger">{{ $row['qty_out'] ?: '-' }}</td>
+                                    <td class="fw-bold">{{ $currentBal }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="text-center">No transactions in this period.</td></tr>
+                            @endforelse
+                        @else
+                            <tr><td colspan="6" class="text-center text-muted">Please select a product to generate ledger.</td></tr>
+                        @endif
+                    </tbody>
+                </table>
             </div>
 
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Product</th>
-                        <th>Variation</th>
-                        <th>Qty In</th>
-                        <th>Qty Out</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($itemLedger as $row)
+            {{-- 2. STOCK INHAND TAB --}}
+            <div id="SR" class="tab-pane fade {{ $tab=='SR'?'show active':'' }}">
+                <form method="GET" class="border p-3 bg-light rounded mb-4">
+                    <input type="hidden" name="tab" value="SR">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Product (Optional)</label>
+                            <select name="item_id" class="form-select form-select-sm">
+                                <option value="">-- All Products --</option>
+                                @foreach($products as $product)
+                                    <option value="{{ $product->id }}" {{ request('item_id') == $product->id ? 'selected' : '' }}>{{ $product->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Location (Optional)</label>
+                            <select name="location_id" class="form-select form-select-sm">
+                                <option value="">-- All Locations --</option>
+                                @foreach($locations as $loc)
+                                    <option value="{{ $loc->id }}" {{ request('location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold">Costing Method</label>
+                            <select name="costing_method" class="form-select form-select-sm">
+                                <option value="avg" {{ request('costing_method') == 'avg' ? 'selected' : '' }}>Average Rate</option>
+                                <option value="latest" {{ request('costing_method') == 'latest' ? 'selected' : '' }}>Latest Purchase Rate</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success btn-sm w-100">Update Stock Report</button>
+                        </div>
+                    </div>
+                </form>
+
+                <table class="table table-sm table-striped table-bordered">
+                    <thead class="table-dark">
                         <tr>
-                            <td>{{ $row['date'] }}</td>
-                            <td>{{ $row['type'] }}</td>
-                            <td>{{ $row['description'] }}</td>
-                            <td>{{ $row['product'] }}</td>
-                            <td>{{ $row['variation'] ?? '-' }}</td>
-                            <td class="text-success">{{ $row['qty_in'] }}</td>
-                            <td class="text-danger">{{ $row['qty_out'] }}</td>
+                            <th>Product Name</th>
+                            <th>Location</th>
+                            <th>Current Qty</th>
+                            <th>Unit Cost</th>
+                            <th>Total Value</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="7" class="text-center">No ledger records found.</td></tr>
-                    @endforelse
-                </tbody>
-                @if(count($itemLedger))
-                <tfoot>
-                    <tr>
-                        <th colspan="5" class="text-end">Totals</th>
-                        <th class="text-success">{{ $totalIn }}</th>
-                        <th class="text-danger">{{ $totalOut }}</th>
-                    </tr>
-                    <tr>
-                        <th colspan="5" class="text-end">Closing Balance</th>
-                        <th colspan="2" class="text-primary">{{ $balance }}</th>
-                    </tr>
-                </tfoot>
-                @endif
-            </table>
-        </div>
-
-        {{-- STOCK INHAND --}}
-        <div id="SR" class="tab-pane fade {{ $tab=='SR'?'show active':'' }}">
-            <form method="GET" class="mb-3">
-                <input type="hidden" name="tab" value="SR">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label>Product</label>
-                        <select name="item_id" class="form-control">
-                            <option value="">-- All Products --</option>
-                            @foreach($products as $product)
-                                <option value="{{ $product->id }}" {{ request('item_id') == $product->id ? 'selected' : '' }}>{{ $product->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label>Location</label>
-                        <select name="location_id" class="form-control">
-                            <option value="">-- All Locations --</option>
-                            @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}" {{ request('location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label>Costing Method</label>
-                        <select name="costing_method" class="form-control">
-                            <option value="avg" {{ request('costing_method') == 'avg' ? 'selected' : '' }}>Average Rate</option>
-                            <option value="latest" {{ request('costing_method') == 'latest' ? 'selected' : '' }}>Latest Rate</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Filter</button>
-                    </div>
-                </div>
-            </form>
-
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Location</th>
-                        <th>Variation</th>
-                        <th>Quantity</th>
-                        <th>Cost Price</th>
-                        <th>Total Cost</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($stockInHand as $stock)
+                    </thead>
+                    <tbody>
+                        @php $totalValue = 0; @endphp
+                        @forelse($stockInHand as $stock)
+                            @php $totalValue += $stock['total']; @endphp
+                            <tr>
+                                <td>{{ $stock['product'] }}</td>
+                                <td><span class="badge bg-info text-dark">{{ $stock['location'] }}</span></td>
+                                <td class="fw-bold">{{ $stock['quantity'] }}</td>
+                                <td>{{ number_format($stock['price'], 2) }}</td>
+                                <td>{{ number_format($stock['total'], 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="text-center">No inventory found for selection.</td></tr>
+                        @endforelse
+                    </tbody>
+                    @if($stockInHand->count() > 0)
+                    <tfoot class="table-light fw-bold">
                         <tr>
-                            <td>{{ $stock['product'] }}</td>
-                            <td><span class="badge bg-info">{{ $stock['location'] }}</span></td>
-                            <td>{{ $stock['variation'] ?? '-' }}</td>
-                            <td>{{ $stock['quantity'] }}</td>
-                            <td>{{ number_format($stock['price'], 2) }}</td>
-                            <td>{{ number_format($stock['total'], 2) }}</td>
+                            <td colspan="4" class="text-end">Grand Total Value:</td>
+                            <td>{{ number_format($totalValue, 2) }}</td>
                         </tr>
-                    @empty
-                        <tr><td colspan="6" class="text-center">No stock data found.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                    </tfoot>
+                    @endif
+                </table>
+            </div>
 
-        {{-- STOCK TRANSFER --}}
-        <div id="STR" class="tab-pane fade {{ $tab=='STR'?'show active':'' }}">
-            <form method="GET" class="mb-3">
-                <input type="hidden" name="tab" value="STR">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label>From Location</label>
-                        <select name="from_location_id" class="form-control">
-                            <option value="">-- All --</option>
-                            @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}" {{ request('from_location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
-                            @endforeach
-                        </select>
+            {{-- 3. STOCK TRANSFER TAB --}}
+            <div id="STR" class="tab-pane fade {{ $tab=='STR'?'show active':'' }}">
+                <form method="GET" class="border p-3 bg-light rounded mb-4">
+                    <input type="hidden" name="tab" value="STR">
+                    <div class="row g-2">
+                        <div class="col-md-2">
+                            <label class="small fw-bold">From Location</label>
+                            <select name="from_location_id" class="form-select form-select-sm">
+                                <option value="">-- All --</option>
+                                @foreach($locations as $loc)
+                                    <option value="{{ $loc->id }}" {{ request('from_location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small fw-bold">To Location</label>
+                            <select name="to_location_id" class="form-select form-select-sm">
+                                <option value="">-- All --</option>
+                                @foreach($locations as $loc)
+                                    <option value="{{ $loc->id }}" {{ request('to_location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold">From Date</label>
+                            <input type="date" name="from_date" value="{{ $from }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold">To Date</label>
+                            <input type="date" name="to_date" value="{{ $to }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-warning btn-sm w-100 fw-bold">Filter Transfers</button>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label>To Location</label>
-                        <select name="to_location_id" class="form-control">
-                            <option value="">-- All --</option>
-                            @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}" {{ request('to_location_id') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label>From Date</label>
-                        <input type="date" name="from_date" value="{{ request('from_date', $from) }}" class="form-control">
-                    </div>
-                    <div class="col-md-2">
-                        <label>To Date</label>
-                        <input type="date" name="to_date" value="{{ request('to_date', $to) }}" class="form-control">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Filter</button>
-                    </div>
-                </div>
-            </form>
+                </form>
 
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Reference</th>
-                        <th>Product</th>
-                        <th>Variation</th>
-                        <th>From Location</th>
-                        <th>To Location</th>
-                        <th>Quantity</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($stockTransfers as $st)
+                <table class="table table-sm table-bordered">
+                    <thead class="table-dark">
                         <tr>
-                            <td>{{ $st['date'] }}</td>
-                            <td>{{ $st['reference'] }}</td>
-                            <td>{{ $st['product'] }}</td>
-                            <td>{{ $st['variation'] ?? '-' }}</td>
-                            <td>{{ $st['from'] }}</td>
-                            <td>{{ $st['to'] }}</td>
-                            <td>{{ $st['quantity'] }}</td>
+                            <th>Date</th>
+                            <th>Ref #</th>
+                            <th>Product</th>
+                            <th>Source (From)</th>
+                            <th>Destination (To)</th>
+                            <th>Qty Transferred</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="7" class="text-center">No stock transfer data found.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse($stockTransfers as $st)
+                            <tr>
+                                <td>{{ $st['date'] }}</td>
+                                <td>TRN-{{ str_pad($st['reference'], 5, '0', STR_PAD_LEFT) }}</td>
+                                <td>{{ $st['product'] }}</td>
+                                <td><span class="text-danger">{{ $st['from'] }}</span></td>
+                                <td><span class="text-success">{{ $st['to'] }}</span></td>
+                                <td class="fw-bold">{{ $st['quantity'] }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="text-center">No transfers recorded in this period.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
         </div>
     </div>
 </div>

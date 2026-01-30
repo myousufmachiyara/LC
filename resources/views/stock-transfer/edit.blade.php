@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Stock Transfer')
+@section('title', 'Stock In/Out | Edit')
 
 @section('content')
 <div class="row">
@@ -11,7 +11,7 @@
     <div class="col-12 mb-2">
       <section class="card">
         <header class="card-header">
-          <h2 class="card-title">Edit Stock Transfer</h2>
+          <h2 class="card-title">Edit Stock In/Out</h2>
           @if ($errors->any())
             <div class="alert alert-danger">
               <ul class="mb-0">
@@ -58,41 +58,51 @@
     <div class="col-12">
       <section class="card">
         <header class="card-header">
-          <h2 class="card-title">Transfer Items</h2>
+          <h2 class="card-title">Items In/Out</h2>
         </header>
         <div class="card-body">
           <table class="table table-bordered" id="itemTable">
-            <thead>
-              <tr>
-                <th width="15%">Item Code</th>
-                <th>Product</th>
-                <th>Variation</th>
-                <th width="12%">Qty</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($transfer->details as $idx => $item)
-              <tr>
-                <td><input type="text" class="form-control product-code" placeholder="Scan/Enter Code" value="{{ $item->variation->barcode ?? '' }}"></td>
-                <td>
-                  <select name="items[{{ $idx }}][product_id]" class="form-control select2-js product-select" required data-preselect-variation-id="{{ $item->variation_id }}">
-                    <option value="">Select Product</option>
-                    @foreach($products as $product)
-                      <option value="{{ $product->id }}" {{ $product->id == $item->product_id ? 'selected' : '' }}>{{ $product->name }}</option>
-                    @endforeach
-                  </select>
-                </td>
-                <td>
-                  <select name="items[{{ $idx }}][variation_id]" class="form-control select2-js variation-select">
-                    <option value="{{ $item->variation_id }}" selected>{{ $item->variation->sku ?? 'Select Variation' }}</option>
-                  </select>
-                </td>
-                <td><input type="number" name="items[{{ $idx }}][quantity]" class="form-control quantity" step="any" value="{{ $item->quantity }}" required></td>
-                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
-              </tr>
-              @endforeach
-            </tbody>
+              <thead>
+                  <tr>
+                      <th>Product</th>
+                      <th>Variation</th>
+                      <th width="18%">Qty In/Out</th> {{-- Increased width for unit box --}}
+                      <th></th>
+                  </tr>
+              </thead>
+              <tbody>
+                  @foreach($transfer->details as $idx => $item)
+                  <tr>
+                      <td>
+                          <select name="items[{{ $idx }}][product_id]" class="form-control select2-js product-select" required data-preselect-variation-id="{{ $item->variation_id }}">
+                              <option value="">Select Product</option>
+                              @foreach($products as $product)
+                                  <option value="{{ $product->id }}" 
+                                          {{ $product->id == $item->product_id ? 'selected' : '' }}
+                                          data-unit="{{ $product->measurementUnit->shortcode ?? '' }}"> {{-- Added data-unit --}}
+                                      {{ $product->name }}
+                                  </option>
+                              @endforeach
+                          </select>
+                      </td>
+                      <td>
+                          <select name="items[{{ $idx }}][variation_id]" class="form-control select2-js variation-select">
+                              <option value="{{ $item->variation_id }}" selected>{{ $item->variation->sku ?? 'Select Variation' }}</option>
+                          </select>
+                      </td>
+                      <td>
+                          {{-- Updated to include Input Group for Unit --}}
+                          <div class="input-group">
+                              <input type="number" name="items[{{ $idx }}][quantity]" class="form-control quantity" step="any" value="{{ $item->quantity }}" required>
+                              <input type="text" class="form-control part-unit-name" 
+                                    value="{{ $item->product->measurementUnit->shortcode ?? '' }}" 
+                                    style="width:60px; flex:none;" readonly placeholder="Unit">
+                          </div>
+                      </td>
+                      <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
+                  </tr>
+                  @endforeach
+              </tbody>
           </table>
           <button type="button" class="btn btn-success btn-sm" onclick="addRow()">+ Add Item</button>
         </div>
@@ -106,7 +116,7 @@
 </div>
 
 <script>
-  let rowIndex = $('#itemTable tbody tr').length || 1;
+  let rowIndex = $('#itemTable tbody tr').length || 0;
 
   $(document).ready(function () {
     $('.select2-js').select2({ width: '100%', dropdownAutoWidth: true });
@@ -115,6 +125,12 @@
     $(document).on('change', '.product-select', function () {
       const row = $(this).closest('tr');
       const productId = $(this).val();
+      
+      // Update Unit Name Display
+      const selectedOption = $(this).find(':selected');
+      const unitName = selectedOption.data('unit') || '';
+      row.find('.part-unit-name').val(unitName);
+
       const preselectVariationId = $(this).data('preselectVariationId') || null;
       $(this).removeData('preselectVariationId');
 
@@ -127,83 +143,6 @@
           .trigger('change');
       }
     });
-
-    // 🔹 Barcode scanning flow
-    $(document).on('blur', '.product-code', function () {
-      const row = $(this).closest('tr');
-      const barcode = $(this).val().trim();
-      if (!barcode) return;
-
-      $.ajax({
-        url: '/get-product-by-code/' + encodeURIComponent(barcode),
-        method: 'GET',
-        success: function (res) {
-          if (!res.success) {
-            alert(res.message || 'Not found');
-            row.find('.product-code').val('').focus();
-            return;
-          }
-
-          const $productSelect = row.find('.product-select');
-          const $variationSelect = row.find('.variation-select');
-
-          if (res.type === 'variation') {
-            const variation = res.variation;
-
-            // ✅ Set product
-            $productSelect.val(variation.product_id).trigger('change.select2');
-
-            // ✅ Directly set variation
-            $variationSelect.html(`<option value="${variation.id}" selected>${variation.sku}</option>`)
-                            .prop('disabled', false)
-                            .trigger('change');
-
-            // ✅ Focus Qty field
-            row.find('.quantity').focus();
-          }
-
-          if (res.type === 'product') {
-            const product = res.product;
-
-            // ✅ Set product
-            $productSelect.val(product.id).trigger('change.select2');
-
-            // ✅ Load variations normally
-            loadVariations(row, product.id);
-
-            // focus on variation after loading
-            setTimeout(() => {
-              $variationSelect.focus();
-            }, 300);
-          }
-        },
-        error: function () {
-          alert('Error fetching product details.');
-        }
-      });
-    });
-
-    // 🔹 POS: Auto-add row when user presses Enter on Qty
-    $(document).on('keypress', '.quantity', function (e) {
-      if (e.which === 13) { // Enter key
-        e.preventDefault();
-        const row = $(this).closest('tr');
-        const qty = $(this).val().trim();
-
-        if (qty !== '') {
-          // Add new row
-          addRow();
-
-          // Focus on new row's barcode
-          const $newRow = $('#itemTable tbody tr').last();
-          $newRow.find('.product-code').focus();
-        } else {
-          alert("Please enter quantity first.");
-          $(this).focus();
-        }
-      }
-    });
-
   });
 
   // 🔹 Add Row
@@ -211,12 +150,11 @@
     const idx = rowIndex++;
     const rowHtml = `
       <tr>
-        <td><input type="text" class="form-control product-code" placeholder="Scan/Enter Code"></td>
         <td>
           <select name="items[${idx}][product_id]" class="form-control select2-js product-select" required>
             <option value="">Select Product</option>
             @foreach($products as $product)
-              <option value="{{ $product->id }}" data-price="{{ $product->selling_price }}">{{ $product->name }}</option>
+              <option value="{{ $product->id }}" data-unit="{{ $product->measurementUnit->shortcode ?? '' }}">{{ $product->name }}</option>
             @endforeach
           </select>
         </td>
@@ -225,7 +163,12 @@
             <option value="">Select Variation</option>
           </select>
         </td>
-        <td><input type="number" name="items[${idx}][quantity]" class="form-control quantity" step="any" required></td>
+        <td>
+          <div class="input-group">
+            <input type="number" name="items[${idx}][quantity]" class="form-control quantity" step="any" required>
+            <input type="text" class="form-control part-unit-name" style="width:60px; flex:none;" readonly placeholder="Unit">
+          </div>
+        </td>
         <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)"><i class="fas fa-times"></i></button></td>
       </tr>
     `;
@@ -234,15 +177,13 @@
     $newRow.find('.select2-js').select2({ width: '100%', dropdownAutoWidth: true });
   }
 
-  // 🔹 Remove Row
   function removeRow(btn) {
     $(btn).closest('tr').remove();
   }
 
-  // 🔹 Load Variations
   function loadVariations(row, productId, preselectVariationId = null) {
     const $variationSelect = row.find('.variation-select');
-    $variationSelect.html('<option value="">Loading...</option>').prop('disabled', false);
+    $variationSelect.html('<option value="">Loading...</option>').prop('disabled', true);
 
     $.get(`/product/${productId}/variations`, function (data) {
       let options = '<option value="">Select Variation</option>';

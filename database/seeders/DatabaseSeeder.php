@@ -72,6 +72,7 @@ class DatabaseSeeder extends Seeder
 
             // Vouchers
             // 'vouchers',
+            'pdc',
         ];
 
         $actions = ['index', 'create', 'edit', 'delete', 'print'];
@@ -224,6 +225,27 @@ class DatabaseSeeder extends Seeder
                 'id' => 3, 
                 'name' => 'Hafiz Center Godown', 
                 'code' => 'hafiz-center', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+            [
+                'id' => 4, 
+                'name' => 'Shop', 
+                'code' => 'shop', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+            [
+                'id' => 5, 
+                'name' => 'Customer', 
+                'code' => 'customer', 
+                'created_at' => $now, 
+                'updated_at' => $now
+            ],
+            [
+                'id' => 6, 
+                'name' => 'Vendor', 
+                'code' => 'vendor', 
                 'created_at' => $now, 
                 'updated_at' => $now
             ],

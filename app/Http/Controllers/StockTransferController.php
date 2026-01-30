@@ -33,7 +33,7 @@ class StockTransferController extends Controller
     {
         try {
             $locations = Location::all();
-            $products = Product::with('variations')->get();
+            $products = Product::with('measurementUnit')->get();
             return view('stock-transfer.create', compact('locations', 'products'));
         } catch (\Exception $e) {
             Log::error('Failed to load create stock transfer form: '.$e->getMessage());
@@ -61,7 +61,6 @@ class StockTransferController extends Controller
                 'date' => $request->date,
                 'remarks' => $request->remarks,
                 'from_location_id' => $request->from_location_id,
-                'to_location_id' => $request->to_location_id,
                 'to_location_id' => $request->to_location_id,
                 'created_by' => Auth::id(),
             ]);
@@ -155,90 +154,135 @@ class StockTransferController extends Controller
         }
     }
 
-    // Print stock transfer PDF
     public function print($id)
     {
         try {
+            // 1. Clear any accidental output (whitespace, notices) that cause header errors
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+
+            // Eager load relationships
             $transfer = StockTransfer::with(['fromLocation', 'toLocation', 'details.product', 'details.variation'])
                 ->findOrFail($id);
 
-            $pdf = new \TCPDF();
+            // Initialize TCPDF
+            $pdf = new \TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+
+            // Document Information
+            $pdf->SetCreator('BillTrix');
+            $pdf->SetAuthor('Lucky Corporation');
+            $pdf->SetTitle('ST-' . $transfer->id);
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(false);
-            $pdf->SetCreator('Your App');
-            $pdf->SetAuthor('Your Company');
-            $pdf->SetTitle('Stock Transfer #' . $transfer->id);
-            $pdf->SetMargins(10, 10, 10);
-            $pdf->AddPage();
-            $pdf->setCellPadding(1.5);
+            $pdf->SetMargins(15, 15, 15);
+            $pdf->SetAutoPageBreak(TRUE, 20);
 
-            // --- Logo ---
-            $logoPath = public_path('assets/img/mj-logo.jpeg');
+            $pdf->AddPage();
+
+            // --- Header Section (Logo) ---
+            $logoPath = public_path('assets/img/billtrix-logo-black.png');
             if (file_exists($logoPath)) {
-                $pdf->Image($logoPath, 8, 10, 40);
+                $pdf->Image($logoPath, 15, 12, 35);
             }
 
-            $pdf->SetXY(130, 12);
-            $transferInfo = '
-            <table cellpadding="2" style="font-size:10px; line-height:14px;">
-                <tr><td><b>Transfer #</b></td><td>' . $transfer->id . '</td></tr>
-                <tr><td><b>Date</b></td><td>' . \Carbon\Carbon::parse($transfer->date)->format('d/m/Y') . '</td></tr>
-                <tr><td><b>From</b></td><td>' . ($transfer->fromLocation->name ?? '-') . '</td></tr>
-                <tr><td><b>To</b></td><td>' . ($transfer->toLocation->name ?? '-') . '</td></tr>
-            </table>';
-            $pdf->writeHTML($transferInfo, false, false, false, false, '');
-
-            $pdf->Line(60, 52.25, 200, 52.25);
-
-            $pdf->SetXY(10, 48);
-            $pdf->SetFillColor(23, 54, 93);
-            $pdf->SetTextColor(255, 255, 255);
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->Cell(50, 8, 'Stock Transfer', 0, 1, 'C', 1);
-            $pdf->SetTextColor(0, 0, 0);
+            // --- Header Title & Info ---
+            $pdf->SetFont('helvetica', 'B', 16);
+            $pdf->SetXY(110, 12);
+            $pdf->Cell(85, 10, 'STOCK TRANSFER', 0, 1, 'R');
+            
+            $pdf->SetFont('helvetica', '', 10);
+            $pdf->SetXY(110, 20);
+            $pdf->Cell(85, 5, 'Transfer #: ' . $transfer->id, 0, 1, 'R');
+            $pdf->SetX(110);
+            $pdf->Cell(85, 5, 'Date: ' . \Carbon\Carbon::parse($transfer->date)->format('d-M-Y'), 0, 1, 'R');
 
             $pdf->Ln(5);
-            $html = '<table border="0.3" cellpadding="4" style="text-align:center;font-size:10px;">
-                <tr style="background-color:#f5f5f5; font-weight:bold;">
-                    <th width="8%">S.No</th>
-                    <th width="38%">Product</th>
-                    <th width="38%">Variation</th>
-                    <th width="16%">Quantity</th>
-                </tr>';
 
-            $count = 0;
-            foreach ($transfer->details as $item) {
-                $count++;
-                $product = $item->product; // main product
-                $variation = $item->variation; // may be null
-                $unit = $product->measurementUnit->shortcode ?? '-';
+            // --- Location Details Table ---
+            $locationHtml = '
+            <table width="50%" border="1" cellpadding="3" style="font-size:10px;">
+                <tr>
+                    <td width="40%" style="background-color:#f2f2f2;"><b>From Location:</b></td>
+                    <td width="60%">' . ($transfer->fromLocation->name ?? '-') . '</td>
+                </tr>
+                <tr>
+                    <td style="background-color:#f2f2f2;"><b>To Location:</b></td>
+                    <td>' . ($transfer->toLocation->name ?? '-') . '</td>
+                </tr>
+            </table>';
+            $pdf->writeHTML($locationHtml, true, false, false, false, '');
+
+            $pdf->Ln(5);
+
+            // --- Items Table ---
+            $html = '
+            <table border="1" cellpadding="5" style="font-size:10px;">
+                <thead>
+                    <tr style="background-color:#f2f2f2; font-weight:bold; text-align:center;">
+                        <th width="8%">#</th>
+                        <th width="38%">Product</th>
+                        <th width="38%">Variation</th>
+                        <th width="16%">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>';
+
+            foreach ($transfer->details as $index => $item) {
+                // Note: Changed $item->product->sku to ->name based on typical product structures
+                $productName = $item->product->name ?? '-'; 
+                $variationSku = $item->variation->sku ?? '-';
+                $unit = $item->product->measurementUnit->shortcode ?? '';
 
                 $html .= '
-                <tr>
-                    <td align="center">' . $count . '</td>
-                    <td>' . ($product->name ?? '-') . '</td>
-                    <td>' . ($variation->sku ?? '-') . '</td>
-                    <td align="center">' .number_format($item->quantity, 2).' '.$unit.'</td>
-                </tr>';
+                    <tr>
+                        <td width="8%" style="text-align:center;">' . ($index + 1) . '</td>
+                        <td width="38%">' . $productName . '</td>
+                        <td width="38%" style="text-align:center;">' . $variationSku . '</td>
+                        <td width="16%" style="text-align:center;">' . number_format($item->quantity, 2) . ' ' . $unit . '</td>
+                    </tr>';
             }
-            $html .= '</table>';
 
-            $pdf->writeHTML($html, true, false, true, false, '');
+            $html .= '</tbody></table>';
 
-            $pdf->Ln(20);
-            $yPos = $pdf->GetY();
-            $lineWidth = 40;
-            $pdf->Line(28, $yPos, 28 + $lineWidth, $yPos);
-            $pdf->Line(130, $yPos, 130 + $lineWidth, $yPos);
-            $pdf->SetXY(28, $yPos + 2);
-            $pdf->Cell($lineWidth, 6, 'Received By', 0, 0, 'C');
-            $pdf->SetXY(130, $yPos + 2);
-            $pdf->Cell($lineWidth, 6, 'Authorized By', 0, 0, 'C');
+            $pdf->writeHTML($html, true, false, false, false, '');
 
-            return $pdf->Output('stock_transfer_' . $transfer->id . '.pdf', 'I');
+            // --- Remarks ---
+            if ($transfer->remarks) {
+                $pdf->Ln(2);
+                $pdf->SetFont('helvetica', 'I', 9);
+                $pdf->MultiCell(0, 5, 'Remarks: ' . $transfer->remarks, 0, 'L');
+            }
+
+            // --- Signatures ---
+            $pdf->SetFont('helvetica', '', 10);
+            $ySign = $pdf->GetY() + 25;
+            
+            if ($ySign > 250) {
+                $pdf->AddPage();
+                $ySign = 30;
+            }
+
+            $pdf->Line(15, $ySign, 75, $ySign);
+            $pdf->SetXY(15, $ySign + 2);
+            $pdf->Cell(60, 5, 'Prepared By', 0, 0, 'C');
+
+            $pdf->Line(135, $ySign, 195, $ySign);
+            $pdf->SetXY(135, $ySign + 2);
+            $pdf->Cell(60, 5, 'Authorized Signature', 0, 0, 'C');
+
+            // 2. Output the PDF as a string and return via Laravel Response
+            $content = $pdf->Output('ST_' . $transfer->id . '.pdf', 'S');
+            
+            return response($content)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                ->header('Pragma', 'no-cache')
+                ->header('Expires', '0');
+
         } catch (\Exception $e) {
-            Log::error('Failed to print stock transfer: '.$e->getMessage());
-            return back()->with('error', 'Failed to generate stock transfer PDF.');
+            \Log::error('Failed to print stock transfer: '.$e->getMessage());
+            return back()->with('error', 'Failed to generate stock transfer PDF. Error: ' . $e->getMessage());
         }
     }
 }
