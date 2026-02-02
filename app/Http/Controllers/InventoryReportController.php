@@ -101,7 +101,7 @@ class InventoryReportController extends Controller
         if ($tab == 'SR') {
             // Note: Ensure 'unit_id' (or your actual FK) is in the select list
             $stockInHand = Product::with('measurementUnit') 
-                ->select('id', 'name', 'measurement_unit_id') // Changed 'measurement_unit' to 'unit_id'
+                ->select('id', 'name', 'measurement_unit') // Changed 'measurement_unit' to 'unit_id'
                 ->when($itemId, fn($q) => $q->where('id', $itemId))
                 ->get()
                 ->flatMap(function ($product) use ($locationId, $locations) {
