@@ -16,7 +16,7 @@ class PostDatedCheque extends Model
 
     public function chartOfAccount()
     {
-        return $this->belongsTo(ChartOfAccount::class, 'coa_id');
+        return $this->belongsTo(ChartOfAccounts::class, 'coa_id');
     }
 
     protected $casts = [

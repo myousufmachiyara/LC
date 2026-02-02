@@ -99,51 +99,50 @@ class InventoryReportController extends Controller
 
         // ================= STOCK IN HAND =================
         if ($tab == 'SR') {
-            $stockInHand = DB::table('products')
-                ->select('id', 'name')
+            // Note: Ensure 'unit_id' (or your actual FK) is in the select list
+            $stockInHand = Product::with('measurementUnit') 
+                ->select('id', 'name', 'measurement_unit_id') // Changed 'measurement_unit' to 'unit_id'
                 ->when($itemId, fn($q) => $q->where('id', $itemId))
                 ->get()
-                ->flatMap(function ($product) use ($locationId, $locations, $costingMethod) {
-                    $targetLocs = $locationId ? $locations->where('id', $locationId) : $locations;
+                ->flatMap(function ($product) use ($locationId, $locations) {
                     
-                    return $targetLocs->map(function ($loc) use ($product, $costingMethod) {
-                        $pIn = DB::table('purchase_invoice_items')
-                            ->where(['item_id' => $product->id, 'location_id' => $loc->id])
-                            ->sum('quantity');
+                    // 1. Filter out virtual locations (Vendor/Customer)
+                    $targetLocs = ($locationId ? $locations->where('id', $locationId) : $locations)
+                        ->filter(function ($loc) {
+                            $name = strtolower($loc->name);
+                            return !in_array($name, ['vendor', 'customer']);
+                        });
 
-                        $sOut = DB::table('sale_invoice_items')
-                            ->where(['product_id' => $product->id, 'location_id' => $loc->id])
-                            ->sum('quantity');
+                    return $targetLocs->map(function ($loc) use ($product) {
 
-                        // FIXED JOINS BELOW: Specify table names to avoid ambiguity
+                        // 2. Calculate Transfers In
                         $tIn = DB::table('stock_transfer_details')
-                        ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                        ->whereNull('stock_transfers.deleted_at') // Added check
-                        ->where(['product_id' => $product->id, 'to_location_id' => $loc->id])
-                        ->sum('quantity');
+                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                            ->whereNull('stock_transfers.deleted_at')
+                            ->where(['product_id' => $product->id, 'to_location_id' => $loc->id])
+                            ->sum('quantity');
 
+                        // 3. Calculate Transfers Out
                         $tOut = DB::table('stock_transfer_details')
-                        ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                        ->whereNull('stock_transfers.deleted_at') // Added check
-                        ->where(['product_id' => $product->id, 'from_location_id' => $loc->id])
-                        ->sum('quantity');
+                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
+                            ->whereNull('stock_transfers.deleted_at')
+                            ->where(['product_id' => $product->id, 'from_location_id' => $loc->id])
+                            ->sum('quantity');
 
-                        $qty = ($pIn + $tIn) - ($sOut + $tOut);
-                        
-                        // Only return rows with stock, or if specifically filtered by location
+                        $qty = $tIn - $tOut;
+
+                        // Skip zeros unless specifically filtering for a single location
                         if ($qty == 0 && empty(request('location_id'))) return null;
 
-                        $price = DB::table('purchase_invoice_items')
-                            ->where('item_id', $product->id)
-                            ->{ $costingMethod == 'latest' ? 'latest' : 'orderBy' }('id')
-                            ->{ $costingMethod == 'latest' ? 'value' : 'avg' }('price') ?? 0;
+                        // 4. Access relationship data
+                        $unitName = $product->measurementUnit->name ?? '';
 
                         return [
-                            'product' => $product->name, 
-                            'location' => $loc->name, 
-                            'quantity' => $qty, 
-                            'price' => $price, 
-                            'total' => $qty * $price
+                            'product'     => $product->name,
+                            'location'    => $loc->name,
+                            'quantity'    => $qty,
+                            'unit'        => $unitName,
+                            'display_qty' => $qty . ' ' . $unitName 
                         ];
                     });
                 })->filter()->values();

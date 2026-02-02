@@ -2,8 +2,7 @@
 @section('title', 'Inventory Reports')
 
 @section('content')
-<div class="card">
-    <div class="card-header bg-white">
+    <div class="tabs">
         <ul class="nav nav-tabs card-header-tabs">
             <li class="nav-item">
                 <a class="nav-link {{ $tab=='IL'?'active fw-bold':'' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'IL']) }}">Item Ledger</a>
@@ -15,9 +14,7 @@
                 <a class="nav-link {{ $tab=='STR'?'active fw-bold':'' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'STR']) }}">Stock Transfer</a>
             </li>
         </ul>
-    </div>
-    
-    <div class="card-body">
+
         <div class="tab-content">
 
             {{-- 1. ITEM LEDGER TAB --}}
@@ -118,15 +115,8 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="small fw-bold">Costing Method</label>
-                            <select name="costing_method" class="form-select form-select-sm">
-                                <option value="avg" {{ request('costing_method') == 'avg' ? 'selected' : '' }}>Average Rate</option>
-                                <option value="latest" {{ request('costing_method') == 'latest' ? 'selected' : '' }}>Latest Purchase Rate</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button type="submit" class="btn btn-success btn-sm w-100">Update Stock Report</button>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success btn-sm w-100">Filter</button>
                         </div>
                     </div>
                 </form>
@@ -137,8 +127,6 @@
                             <th>Product Name</th>
                             <th>Location</th>
                             <th>Current Qty</th>
-                            <th>Unit Cost</th>
-                            <th>Total Value</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -148,9 +136,7 @@
                             <tr>
                                 <td>{{ $stock['product'] }}</td>
                                 <td><span class="badge bg-info text-dark">{{ $stock['location'] }}</span></td>
-                                <td class="fw-bold">{{ $stock['quantity'] }}</td>
-                                <td>{{ number_format($stock['price'], 2) }}</td>
-                                <td>{{ number_format($stock['total'], 2) }}</td>
+                                <td class="fw-bold">{{ $stock['quantity'] . $stock['unit'] }}</td>
                             </tr>
                         @empty
                             <tr><td colspan="5" class="text-center">No inventory found for selection.</td></tr>
@@ -234,5 +220,4 @@
 
         </div>
     </div>
-</div>
 @endsection
