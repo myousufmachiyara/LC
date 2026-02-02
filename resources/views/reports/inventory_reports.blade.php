@@ -130,9 +130,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @php $totalValue = 0; @endphp
                         @forelse($stockInHand as $stock)
-                            @php $totalValue += $stock['total']; @endphp
                             <tr>
                                 <td>{{ $stock['product'] }}</td>
                                 <td><span class="badge bg-info text-dark">{{ $stock['location'] }}</span></td>
@@ -142,14 +140,6 @@
                             <tr><td colspan="5" class="text-center">No inventory found for selection.</td></tr>
                         @endforelse
                     </tbody>
-                    @if($stockInHand->count() > 0)
-                    <tfoot class="table-light fw-bold">
-                        <tr>
-                            <td colspan="4" class="text-end">Grand Total Value:</td>
-                            <td>{{ number_format($totalValue, 2) }}</td>
-                        </tr>
-                    </tfoot>
-                    @endif
                 </table>
             </div>
 
