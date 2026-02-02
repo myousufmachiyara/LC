@@ -134,7 +134,7 @@
                             <tr>
                                 <td>{{ $stock['product'] }}</td>
                                 <td><span class="badge bg-info text-dark">{{ $stock['location'] }}</span></td>
-                                <td class="fw-bold">{{ $stock['quantity'] . $stock['unit'] }}</td>
+                                <td class="fw-bold">{{ $stock['quantity'] .' '. $stock['unit'] }}</td>
                             </tr>
                         @empty
                             <tr><td colspan="5" class="text-center">No inventory found for selection.</td></tr>
