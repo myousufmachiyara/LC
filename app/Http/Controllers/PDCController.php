@@ -11,33 +11,47 @@ use Carbon\Carbon;
 class PDCController extends Controller
 {
     public function index() {
-        $cheques = PostDatedCheque::with('chartOfAccount')->get();
-        // Fetch all COA for the dropdown
-        $chartOfAccounts = ChartOfAccounts::orderBy('name', 'asc')->get(); 
+        $cheques = PostDatedCheque::get();
         
-        return view('pdc.index', compact('cheques', 'chartOfAccounts'));
-    }
-
-    public function create()
-    {
-        return view('admin.pdc.create');
+        return view('pdc.index', compact('cheques'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'cheque_number' => 'required|unique:post_dated_cheques',
-            'cheque_date'   => 'required|date',
-            'amount'        => 'required|numeric',
-            'bank_name'     => 'required|string',
-            'coa_id'        => 'required|exists:chart_of_accounts,id', // Validate against COA table
+            'type' => 'required|in:receivable,payable',
+            'cheque_number' => 'required',
+            'cheque_date' => 'required|date',
+            'amount' => 'required|numeric',
+            'bank_name' => 'required',
+            'party_name' => 'required|string',
+            'remarks' => 'nullable|string',
         ]);
 
+        $validated['status'] = ($request->type == 'receivable') ? 'received' : 'issued';
         $validated['created_by'] = Auth::id();
-        
-        PostDatedCheque::create($validated);
 
-        return redirect()->route('pdc.index')->with('success', 'Cheque recorded successfully.');
+        PostDatedCheque::create($validated);
+        return redirect()->back()->with('success', 'Cheque recorded.');
+    }
+
+    public function transfer(Request $request, $id)
+    {
+        $request->validate(['transfer_to_party' => 'required|string']);
+        
+        $cheque = PostDatedCheque::findOrFail($id);
+        
+        if($cheque->type != 'receivable' || $cheque->status != 'received') {
+            return back()->with('error', 'Only received inward cheques can be transferred.');
+        }
+
+        $cheque->update([
+            'status' => 'transferred',
+            'transfer_to_party' => $request->transfer_to_party,
+            'remarks' => 'Transferred to ' . $request->transfer_to_party
+        ]);
+
+        return back()->with('success', 'Cheque transferred to ' . $request->transfer_to_party);
     }
 
     // Add an edit method to serve JSON for your modal
@@ -51,15 +65,25 @@ class PDCController extends Controller
     public function update(Request $request, $id)
     {
         $cheque = PostDatedCheque::findOrFail($id);
+        
         $validated = $request->validate([
+            'type' => 'required|in:receivable,payable',
             'cheque_number' => 'required|unique:post_dated_cheques,cheque_number,'.$id,
             'cheque_date'   => 'required|date',
             'amount'        => 'required|numeric',
             'bank_name'     => 'required|string',
-            'coa_id'        => 'required|exists:chart_of_accounts,id',
+            'party_name'    => 'required|string',
+            'remarks'       => 'nullable|string',
         ]);
 
+        // Logic to update status if the type was changed during edit
+        // Only update status if the cheque is still in its initial state
+        if ($cheque->status == 'received' || $cheque->status == 'issued') {
+            $validated['status'] = ($request->type == 'receivable') ? 'received' : 'issued';
+        }
+
         $cheque->update($validated);
+        
         return redirect()->route('pdc.index')->with('success', 'Cheque updated.');
     }
 
@@ -73,8 +97,14 @@ class PDCController extends Controller
     public function clear($id)
     {
         $cheque = PostDatedCheque::findOrFail($id);
+        
+        // Logic: If inward, it must be 'deposited' first. 
+        // If outward, it can go from 'issued' to 'cleared'.
+        if ($cheque->type == 'payable' && $cheque->status != 'issued') {
+            return back()->with('error', 'Only issued cheques can be cleared.');
+        }
+
         $cheque->update(['status' => 'cleared', 'cleared_at' => now()]);
-        // Trigger accounting entry here if needed
         return back()->with('success', 'Cheque cleared.');
     }
 

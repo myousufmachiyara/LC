@@ -10,14 +10,19 @@ class PostDatedCheque extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'cheque_number', 'cheque_date', 'amount', 'bank_name', 
-        'coa_id', 'status', 'deposited_at', 'cleared_at', 'remarks', 'created_by'
+        'type', // Add this
+        'cheque_number', 
+        'cheque_date', 
+        'amount', 
+        'bank_name', 
+        'party_name', 
+        'transfer_to_party', // Add this
+        'status', 
+        'deposited_at', 
+        'cleared_at', 
+        'remarks', 
+        'created_by'
     ];
-
-    public function chartOfAccount()
-    {
-        return $this->belongsTo(ChartOfAccounts::class, 'coa_id');
-    }
 
     protected $casts = [
         'cheque_date' => 'date',

@@ -290,9 +290,9 @@
           $lotOutWrapper.hide();
           $lotInWrapper.show().html(`
               <div class="input-group mb-1">
-                  <input type="text" name="items[${row.index()}][new_lot_number]" class="form-control new-lot-input" placeholder="Vendor Lot (Optional)">
+                  <input type="text" name="items[${row.index()}][new_lot_number]" class="form-control new-lot-input" placeholder="New Lot No." readonly>
               </div>
-              <small class="text-success"><i class="fas fa-plus-circle"></i> New stock entry: system will generate lot</small>
+              <small class="text-success"><i class="fas fa-plus-circle"></i> New stock entry: system will generate lot No.</small>
           `);
           row.find('.generate-lot-flag').val('1');
           row.find('.available-qty-info').hide();

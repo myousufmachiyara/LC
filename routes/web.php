@@ -130,16 +130,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Add lifecycle routes for PDC after or before the loop
     Route::prefix('pdc')->group(function () {
-        Route::patch('/{id}/deposit', [PDCController::class, 'deposit'])
-            ->middleware("check.permission:pdc.edit")
-            ->name("pdc.deposit");
-            
-        Route::patch('/{id}/clear', [PDCController::class, 'clear'])
-            ->middleware("check.permission:pdc.edit")
-            ->name("pdc.clear");
-            
-        Route::patch('/{id}/bounce', [PDCController::class, 'bounce'])
-            ->middleware("check.permission:pdc.edit")
-            ->name("pdc.bounce");
+        Route::patch('/{id}/deposit', [PDCController::class, 'deposit']) ->middleware("check.permission:pdc.edit")->name("pdc.deposit");   
+        Route::patch('/{id}/clear', [PDCController::class, 'clear'])->middleware("check.permission:pdc.edit")->name("pdc.clear");
+        Route::patch('/{id}/bounce', [PDCController::class, 'bounce'])->middleware("check.permission:pdc.edit")->name("pdc.bounce");
+        Route::patch('/{id}/transfer', [PDCController::class, 'transfer'])->middleware("check.permission:pdc.edit")->name("pdc.transfer");
     });
 });

@@ -9,19 +9,23 @@ return new class extends Migration {
     {
         Schema::create('post_dated_cheques', function (Blueprint $table) {
             $table->id();
-            $table->string('cheque_number')->unique();
+            $table->enum('type', ['receivable', 'payable'])->default('receivable'); // New
+            $table->string('cheque_number'); // Removed unique so transferred cheques can exist
             $table->date('cheque_date');
             $table->decimal('amount', 15, 2);
             $table->string('bank_name');
+            $table->string('remarks')->nullable();
             
-            // Updated line: Link to Chart of Accounts
-            $table->foreignId('coa_id')->constrained('chart_of_accounts')->onDelete('cascade');
+            // Who gave it to us (Receivable) OR Who we gave it to (Payable)
+            $table->string('party_name'); 
             
-            $table->enum('status', ['received', 'deposited', 'cleared', 'bounced', 'cancelled'])->default('received');
+            // For transfers: if we give a received cheque to a customer
+            $table->string('transfer_to_party')->nullable(); 
+
+            $table->enum('status', ['received', 'issued', 'transferred', 'deposited', 'cleared', 'bounced'])
+                ->default('received');
             $table->date('deposited_at')->nullable();
             $table->date('cleared_at')->nullable();
-            $table->text('remarks')->nullable();
-            
             $table->foreignId('created_by')->constrained('users');
             $table->timestamps();
             $table->softDeletes();

@@ -8,8 +8,9 @@
             <section class="card">
                 @if(session('success'))
                     <div class="alert alert-success">{{ session('success') }}</div>
+                @elseif (session('error'))
+                <div class="alert alert-danger">{{ session('error') }}</div>
                 @endif
-
                 <header class="card-header">
                     <div style="display: flex; justify-content: space-between;">
                         <h2 class="card-title">Post-Dated Cheques (PDC)</h2>
@@ -24,15 +25,15 @@
                 </header>
                 
                 <div class="card-body">
-                    <div class="modal-wrapper table-scroll">
+                    <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0" id="datatable-default">
                             <thead>
                                 <tr>
                                     <th>S.NO</th>
+                                    <th>Type</th>
                                     <th>Cheque Date</th>
                                     <th>Cheque #</th>
-                                    <th>Bank Name</th>
-                                    <th>Received From</th>
+                                    <th>Account Name</th>
                                     <th>Amount</th>
                                     <th>Status</th>
                                     <th class="text-center">Action</th>
@@ -43,17 +44,30 @@
                                 <tr>
                                     <td>{{ $loop->iteration }}</td>
                                     <td>
+                                        <span class="badge badge-{{ $item->type == 'receivable' ? 'success' : 'danger' }}">
+                                            {{ $item->type == 'receivable' ? 'Inward' : 'Outward' }}
+                                        </span>
+                                    </td>
+                                    <td>
                                         <strong>{{ \Carbon\Carbon::parse($item->cheque_date)->format('d-m-Y') }}</strong>
                                         @if($item->status == 'received' && $item->cheque_date <= date('Y-m-d'))
                                             <span class="badge badge-danger">Due</span>
                                         @endif
                                     </td>
                                     <td>{{ $item->cheque_number }}</td>
-                                    <td>{{ $item->bank_name }}</td>
-                                    <td>{{ $item->received_from }}</td>
+                                    <td>{{ $item->chartOfAccount->name ?? $item->received_from }}</td>
                                     <td>{{ number_format($item->amount, 2) }}</td>
                                     <td>
-                                        <span class="badge badge-{{ $item->status == 'cleared' ? 'success' : ($item->status == 'bounced' ? 'danger' : ($item->status == 'deposited' ? 'warning' : 'dark')) }}">
+                                        @php
+                                            $statusMap = [
+                                                'cleared' => 'success',
+                                                'bounced' => 'danger',
+                                                'deposited' => 'warning',
+                                                'transferred' => 'info'
+                                            ];
+                                            $class = $statusMap[$item->status] ?? 'dark';
+                                        @endphp
+                                        <span class="badge badge-{{ $class }}">
                                             {{ ucfirst($item->status) }}
                                         </span>
                                     </td>
@@ -64,12 +78,22 @@
                                                 @csrf @method('PATCH')
                                                 <button type="submit" class="btn btn-link p-0 m-0 text-warning" title="Deposit"><i class="fas fa-university"></i></button>
                                             </form>
+
+                                            {{-- Transfer Action for Inward Cheques --}}
+                                            @if($item->type == 'receivable' && ($item->status == 'received' || $item->status == 'deposited'))
+                                                <button type="button" class="btn btn-link p-0 m-0 text-info ml-2" onclick="openTransferModal({{ $item->id }})" title="Transfer">
+                                                    <i class="fas fa-exchange-alt"></i>
+                                                </button>
+                                            @endif
                                         @endif
 
-                                        @if($item->status == 'deposited')
+                                        {{-- Logic for Clearing Cheques --}}
+                                        @if(($item->status == 'deposited') || ($item->type == 'payable' && $item->status == 'issued'))
                                             <form action="{{ route('pdc.clear', $item->id) }}" method="POST" class="d-inline">
                                                 @csrf @method('PATCH')
-                                                <button type="submit" class="btn btn-link p-0 m-0 text-success" title="Clear"><i class="fas fa-check-circle"></i></button>
+                                                <button type="submit" class="btn btn-link p-0 m-0 text-success" title="Clear">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </button>
                                             </form>
                                         @endif
 
@@ -79,9 +103,9 @@
                                         @endcan
 
                                         @can('pdc.delete')
-                                            <form action="{{ route('pdc.destroy', $item->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this record?');">
+                                            <form action="{{ route('pdc.destroy', $item->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this record?');">
                                                 @csrf @method('DELETE')
-                                                <button type="submit" class="btn btn-link p-0 m-0 text-danger"><i class="fa fa-trash-alt"></i></button>
+                                                <button type="submit" class="btn btn-link p-0 m-0 text-danger ml-2"><i class="fa fa-trash-alt"></i></button>
                                             </form>
                                         @endcan
                                     </td>
@@ -119,15 +143,19 @@
                                     <input type="text" class="form-control" name="bank_name" required>
                                 </div>
                                 <div class="col-lg-12 mb-2">
-                                    <label>Received From (Account)<span class="text-danger">*</span></label>
-                                    <select data-plugin-selecttwo class="form-control select2-js" name="coa_id" required>
-                                        <option value="" disabled selected>Select Account</option>
-                                        @foreach($chartOfAccounts as $account)
-                                            <option value="{{ $account->id }}">
-                                                {{ $account->name }} ({{ $account->account_code }})
-                                            </option>
-                                        @endforeach
+                                    <label>Cheque Type<span class="text-danger">*</span></label>
+                                    <select class="form-control" name="type" required>
+                                        <option value="receivable">Inward (Receiving from Customer)</option>
+                                        <option value="payable">Outward (Issuing to Vendor)</option>
                                     </select>
+                                </div>
+                                <div class="col-lg-6 mb-2">
+                                    <label>Party Name<span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="party_name" required>
+                                </div>
+                                <div class="col-lg-6 mb-2">
+                                    <label>Remark</label>
+                                    <input type="text" class="form-control" name="remarks">
                                 </div>
                             </div>
                         </div>
@@ -142,36 +170,85 @@
 
             {{-- EDIT MODAL --}}
             @can('pdc.edit')
-            <div id="editModal" class="modal-block modal-block-primary mfp-hide">
+                <div id="editModal" class="modal-block modal-block-primary mfp-hide">
+                    <section class="card">
+                        <form method="post" id="editForm" action="">
+                            @csrf @method('PUT')
+                            <header class="card-header"><h2 class="card-title">Edit PDC Record</h2></header>
+                            <div class="card-body">
+                                <div class="row form-group">
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Cheque Number</label>
+                                        <input type="text" class="form-control" name="cheque_number" id="edit_cheque_number" required>
+                                    </div>
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Cheque Date</label>
+                                        <input type="date" class="form-control" name="cheque_date" id="edit_cheque_date" required>
+                                    </div>
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Amount</label>
+                                        <input type="number" step="any" class="form-control" name="amount" id="edit_amount" required>
+                                    </div>
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Bank Name</label>
+                                        <input type="text" class="form-control" name="bank_name" id="edit_bank_name" required>
+                                    </div>
+                                    <div class="col-lg-12 mb-2">
+                                        <label>Cheque Type<span class="text-danger">*</span></label>
+                                        <select class="form-control" name="type" id="edit_type" required>
+                                            <option value="receivable">Inward (Receiving from Customer)</option>
+                                            <option value="payable">Outward (Issuing to Vendor)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Party Name</label>
+                                        <input type="text" class="form-control" name="party_name" id="edit_party_name" required>
+                                    </div>
+                                    <div class="col-lg-6 mb-2">
+                                        <label>Remarks</label>
+                                        <input type="text" class="form-control" name="remarks" id="edit_remarks">
+                                    </div>
+                                </div>
+                            </div>
+                            <footer class="card-footer text-end">
+                                <button type="submit" class="btn btn-primary">Update Record</button>
+                                <button class="btn btn-default modal-dismiss">Cancel</button>
+                            </footer>
+                        </form>
+                    </section>
+                </div>
+            @endcan
+
+            <div id="transferModal" class="modal-block modal-block-primary mfp-hide">
                 <section class="card">
-                    <form method="post" id="editForm" action="">
-                        @csrf @method('PUT')
-                        <header class="card-header"><h2 class="card-title">Edit PDC Record</h2></header>
+                    <form method="post" id="transferForm" action="">
+                        @csrf @method('PATCH')
+                        <header class="card-header"><h2 class="card-title">Transfer Cheque</h2></header>
                         <div class="card-body">
-                            <div class="row form-group">
-                                <div class="col-lg-6 mb-2">
-                                    <label>Cheque Number</label>
-                                    <input type="text" class="form-control" name="cheque_number" id="edit_cheque_number">
-                                </div>
-                                <div class="col-lg-6 mb-2">
-                                    <label>Amount</label>
-                                    <input type="number" step="any" class="form-control" name="amount" id="edit_amount">
-                                </div>
-                                {{-- Add other fields as needed --}}
+                            <div class="form-group">
+                                <label>Transfer to Party</label>
+                                <input type="text" class="form-control" name="transfer_to_party" required>
                             </div>
                         </div>
                         <footer class="card-footer text-end">
-                            <button type="submit" class="btn btn-primary">Update Record</button>
+                            <button type="submit" class="btn btn-primary">Complete Transfer</button>
                             <button class="btn btn-default modal-dismiss">Cancel</button>
                         </footer>
                     </form>
                 </section>
             </div>
-            @endcan
         </div>
     </div>
 
     <script>
+        function openTransferModal(id) {
+            $('#transferForm').attr('action', '/pdc/' + id + '/transfer');
+            $.magnificPopup.open({
+                items: { src: '#transferModal' },
+                type: 'inline'
+            });
+        }
+
         function editPDC(id) {
             fetch('/pdc/' + id + '/edit')
                 .then(res => res.json())
@@ -179,9 +256,15 @@
                     $('#editForm').attr('action', '/pdc/' + id);
                     $('#edit_cheque_number').val(data.cheque_number);
                     $('#edit_amount').val(data.amount);
-                    
-                    // Set the COA dropdown and refresh Select2
-                    $('[name="coa_id"]').val(data.coa_id).trigger('change');
+                    $('#edit_bank_name').val(data.bank_name);
+                    $('#edit_party_name').val(data.party_name);
+                    $('#edit_remarks').val(data.remarks);
+                    $('#edit_type').val(data.type);
+                    // Format date for HTML input (YYYY-MM-DD)
+                    if(data.cheque_date) {
+                        let d = new Date(data.cheque_date);
+                        $('#edit_cheque_date').val(d.toISOString().split('T')[0]);
+                    }
                     
                     $.magnificPopup.open({
                         items: { src: '#editModal' },
