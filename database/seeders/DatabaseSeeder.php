@@ -210,42 +210,48 @@ class DatabaseSeeder extends Seeder
             [
                 'id' => 1, 
                 'name' => 'Naveed Godown', 
-                'code' => 'naveed-godown', 
+                'code' => 'naveed-godown',
+                'type' => 'godown', 
                 'created_at' => $now, 
                 'updated_at' => $now
             ],
             [
                 'id' => 2, 
                 'name' => 'W.W godown', 
-                'code' => 'ww-godown', 
+                'code' => 'ww-godown',
+                'type' => 'godown',
                 'created_at' => $now, 
                 'updated_at' => $now
             ],
             [
                 'id' => 3, 
                 'name' => 'Hafiz Center Godown', 
-                'code' => 'hafiz-center', 
+                'code' => 'hafiz-center',
+                'type' => 'godown',
                 'created_at' => $now, 
                 'updated_at' => $now
             ],
             [
                 'id' => 4, 
                 'name' => 'Shop', 
-                'code' => 'shop', 
+                'code' => 'shop',
+                'type' => 'shop',
                 'created_at' => $now, 
                 'updated_at' => $now
             ],
             [
                 'id' => 5, 
                 'name' => 'Customer', 
-                'code' => 'customer', 
+                'code' => 'customer',
+                'type' => 'customer',
                 'created_at' => $now, 
                 'updated_at' => $now
             ],
             [
                 'id' => 6, 
                 'name' => 'Vendor', 
-                'code' => 'vendor', 
+                'code' => 'vendor',
+                'type' => 'vendor',
                 'created_at' => $now, 
                 'updated_at' => $now
             ],

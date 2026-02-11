@@ -14,8 +14,12 @@ class StockTransfer extends Model
         'date',
         'from_location_id',
         'to_location_id',
-        'remarks',       // added remarks to match table
+        'remarks',
         'created_by'
+    ];
+
+    protected $casts = [
+        'date' => 'date',
     ];
 
     // Relationships

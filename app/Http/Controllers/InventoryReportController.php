@@ -97,55 +97,24 @@ class InventoryReportController extends Controller
                 ->orderBy('date', 'asc')->get()->map(fn($item) => (array)$item);
         }
 
-        // ================= STOCK IN HAND =================
+        // ================= STOCK IN HAND (LOT WISE) =================
         if ($tab == 'SR') {
-            // Note: Ensure 'unit_id' (or your actual FK) is in the select list
-            $stockInHand = Product::with('measurementUnit') 
-                ->select('id', 'name', 'measurement_unit') // Changed 'measurement_unit' to 'unit_id'
-                ->when($itemId, fn($q) => $q->where('id', $itemId))
+            $stockInHand = \App\Models\StockLot::with(['product.measurementUnit', 'variation', 'location'])
+                ->when($itemId, fn($q) => $q->where('product_id', $itemId))
+                ->when($locationId, fn($q) => $q->where('location_id', $locationId))
+                ->where('quantity', '>', 0)
                 ->get()
-                ->flatMap(function ($product) use ($locationId, $locations) {
-                    
-                    // 1. Filter out virtual locations (Vendor/Customer)
-                    $targetLocs = ($locationId ? $locations->where('id', $locationId) : $locations)
-                        ->filter(function ($loc) {
-                            $name = strtolower($loc->name);
-                            return !in_array($name, ['vendor', 'customer']);
-                        });
-
-                    return $targetLocs->map(function ($loc) use ($product) {
-
-                        // 2. Calculate Transfers In
-                        $tIn = DB::table('stock_transfer_details')
-                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                            ->whereNull('stock_transfers.deleted_at')
-                            ->where(['product_id' => $product->id, 'to_location_id' => $loc->id])
-                            ->sum('quantity');
-
-                        // 3. Calculate Transfers Out
-                        $tOut = DB::table('stock_transfer_details')
-                            ->join('stock_transfers', 'stock_transfer_details.transfer_id', '=', 'stock_transfers.id')
-                            ->whereNull('stock_transfers.deleted_at')
-                            ->where(['product_id' => $product->id, 'from_location_id' => $loc->id])
-                            ->sum('quantity');
-
-                        $qty = $tIn - $tOut;
-
-                        // Skip zeros unless specifically filtering for a single location
-                        if ($qty == 0 && empty(request('location_id'))) return null;
-
-                        // 4. Access relationship data
-                        $unitName = $product->measurementUnit->name ?? '';
-
-                        return [
-                            'product'     => $product->name,
-                            'location'    => $loc->name,
-                            'quantity'    => $qty,
-                            'unit'        => $unitName,
-                            'display_qty' => $qty . ' ' . $unitName 
-                        ];
-                    });
-                })->filter()->values();
+                ->map(function ($lot) {
+                    return [
+                        'product'    => $lot->product->name ?? 'N/A',
+                        'variation'  => $lot->variation->sku ?? 'Standard',
+                        'location'   => $lot->location->name ?? 'N/A',
+                        'lot_number' => $lot->lot_number,
+                        'quantity'   => $lot->quantity,
+                        'unit'       => $lot->product->measurementUnit->shortcode ?? '',
+                        'created_at' => $lot->created_at->format('d-M-Y'),
+                    ];
+                });
         }
 
         // ================= STOCK TRANSFERS =================

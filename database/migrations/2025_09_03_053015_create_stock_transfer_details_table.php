@@ -16,6 +16,11 @@ return new class extends Migration
             $table->unsignedBigInteger('transfer_id');
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('variation_id')->nullable();
+            
+            // LOT TRACKING FIELDS (NEW)
+            $table->string('lot_number')->nullable();
+            $table->string('vendor_lot_number')->nullable();
+            
             $table->decimal('quantity', 15, 2);
             $table->timestamps();
 

@@ -11,6 +11,7 @@
       @elseif (session('error'))
         <div class="alert alert-danger">{{ session('error') }}</div>
       @endif
+      
       <header class="card-header">
         <div style="display: flex; justify-content: space-between;">
           <h2 class="card-title">All Locations</h2>
@@ -20,9 +21,6 @@
             </button>
           </div>
         </div>
-        @if ($errors->has('error'))
-          <strong class="text-danger">{{ $errors->first('error') }}</strong>
-        @endif
       </header>
 
       <div class="card-body">
@@ -33,6 +31,7 @@
                 <th>#</th>
                 <th>Name</th>
                 <th>Code</th>
+                <th>Type</th> {{-- Added Column --}}
                 <th>Action</th>
               </tr>
             </thead>
@@ -42,6 +41,12 @@
                 <td>{{ $loop->iteration }}</td>
                 <td>{{ $location->name }}</td>
                 <td>{{ $location->code }}</td>
+                <td>
+                  {{-- Display type with a badge for better visibility --}}
+                  <span class="badge {{ $location->type == 'godown' ? 'bg-info' : ($location->type == 'shop' ? 'bg-success' : 'bg-secondary') }}">
+                    {{ ucfirst($location->type) }}
+                  </span>
+                </td>
                 
                 <td>
                   <a class="text-primary modal-with-form" href="#editLocationModal{{ $location->id }}">
@@ -57,7 +62,6 @@
                 </td>
               </tr>
 
-              <!-- Edit Modal -->
               <div id="editLocationModal{{ $location->id }}" class="modal-block modal-block-warning mfp-hide">
                 <section class="card">
                   <form method="post" action="{{ route('locations.update', $location) }}">
@@ -74,6 +78,16 @@
                       <div class="form-group mb-3">
                         <label>Code</label>
                         <input type="text" class="form-control" name="code" value="{{ old('code', $location->code) }}">
+                      </div>
+                      {{-- TYPE DROPDOWN FOR EDIT --}}
+                      <div class="form-group mb-3">
+                        <label>Location Type <span class="text-danger">*</span></label>
+                        <select name="type" class="form-control" required>
+                          <option value="godown" {{ $location->type == 'godown' ? 'selected' : '' }}>Godown (Warehouse)</option>
+                          <option value="shop" {{ $location->type == 'shop' ? 'selected' : '' }}>Shop (Retail)</option>
+                          <option value="vendor" {{ $location->type == 'vendor' ? 'selected' : '' }}>Vendor (Supplier)</option>
+                          <option value="customer" {{ $location->type == 'customer' ? 'selected' : '' }}>Customer</option>
+                        </select>
                       </div>
                     </div>
                     <footer class="card-footer">
@@ -94,7 +108,6 @@
       </div>
     </section>
 
-    <!-- Add Modal -->
     <div id="addLocationModal" class="modal-block modal-block-primary mfp-hide">
       <section class="card">
         <form method="post" action="{{ route('locations.store') }}">
@@ -110,6 +123,16 @@
             <div class="form-group mb-3">
               <label>Code</label>
               <input type="text" class="form-control" name="code" value="{{ old('code') }}">
+            </div>
+            {{-- TYPE DROPDOWN FOR NEW --}}
+            <div class="form-group mb-3">
+              <label>Location Type <span class="text-danger">*</span></label>
+              <select name="type" class="form-control" required>
+                <option value="godown" selected>Godown (Warehouse)</option>
+                <option value="shop">Shop (Retail)</option>
+                <option value="vendor">Vendor (Supplier)</option>
+                <option value="customer">Customer</option>
+              </select>
             </div>
           </div>
           <footer class="card-footer">

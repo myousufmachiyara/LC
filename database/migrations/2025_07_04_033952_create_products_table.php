@@ -26,7 +26,7 @@ return new class extends Migration
             // Classification
             $table->unsignedBigInteger('measurement_unit');
             $table->boolean('is_active')->default(true);
-
+            $table->boolean('track_lots')->default(true);
             $table->softDeletes();
             $table->timestamps();
 

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->unique();
             $table->string('code')->nullable();
+            $table->enum('type', ['godown', 'shop', 'vendor', 'customer'])->default('godown');
             $table->timestamps();
             $table->softDeletes(); 
         });

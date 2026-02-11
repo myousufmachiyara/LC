@@ -120,26 +120,40 @@
                         </div>
                     </div>
                 </form>
-
-                <table class="table table-sm table-striped table-bordered">
+                <table class="table table-sm table-striped table-bordered align-middle">
                     <thead class="table-dark">
                         <tr>
                             <th>Product Name</th>
+                            <th>Variation (SKU)</th>
                             <th>Location</th>
-                            <th>Current Qty</th>
+                            <th>Lot Number</th>
+                            <th class="text-end">Current Qty</th>
+                            <th>Date Received</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($stockInHand as $stock)
                             <tr>
-                                <td>{{ $stock['product'] }}</td>
+                                <td><strong>{{ $stock['product'] }}</strong></td>
+                                <td><code class="text-dark">{{ $stock['variation'] }}</code></td>
                                 <td><span class="badge bg-info text-dark">{{ $stock['location'] }}</span></td>
-                                <td class="fw-bold">{{ $stock['quantity'] .' '. $stock['unit'] }}</td>
+                                <td><span class="badge bg-secondary">{{ $stock['lot_number'] }}</span></td>
+                                <td class="fw-bold text-end">{{ number_format($stock['quantity'], 2) }} {{ $stock['unit'] }}</td>
+                                <td><small>{{ $stock['created_at'] }}</small></td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center">No inventory found for selection.</td></tr>
+                            <tr><td colspan="6" class="text-center py-3">No inventory found in stock lots.</td></tr>
                         @endforelse
                     </tbody>
+                    @if($stockInHand->isNotEmpty())
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="4" class="text-end">Total Available:</th>
+                            <th class="text-end">{{ number_format($stockInHand->sum('quantity'), 2) }}</th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                    @endif
                 </table>
             </div>
 

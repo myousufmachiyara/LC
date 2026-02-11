@@ -5,16 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class StockTransferDetail extends Model
+class StockLot extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'transfer_id',
+        'location_id',
         'product_id',
         'variation_id',
         'lot_number',
-        'vendor_lot_number',
         'quantity'
     ];
 
@@ -23,19 +22,18 @@ class StockTransferDetail extends Model
     ];
 
     // Relationships
-    public function transfer()
+    public function location()
     {
-        return $this->belongsTo(StockTransfer::class, 'transfer_id');
+        return $this->belongsTo(Location::class);
     }
 
     public function product()
     {
-        return $this->belongsTo(Product::class, 'product_id');
+        return $this->belongsTo(Product::class);
     }
 
     public function variation()
     {
-        return $this->belongsTo(ProductVariation::class, 'variation_id');
+        return $this->belongsTo(ProductVariation::class);
     }
 }
-

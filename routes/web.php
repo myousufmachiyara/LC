@@ -126,6 +126,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::get('/get-location-stock', [ProductController::class, 'getLocationStock']);
+    Route::get('/stock-lots/available', [StockTransferController::class, 'getAvailableLots'])->name('stock.lots.available');
 
     // Add lifecycle routes for PDC after or before the loop
     Route::prefix('pdc')->group(function () {
